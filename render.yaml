@@ -1,0 +1,72 @@
+# Render configuration - middleware NF-e MGBP Brasil
+services:
+  - type: web
+    name: mgbp-brasil-middleware
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
+      - key: PORT
+        value: 10000
+      - key: API_KEY
+        sync: false
+      - key: ODOO_ENABLED
+        value: "1"
+      - key: ODOO_URL
+        value: https://mgbp-brasil.odoo.com
+      - key: ODOO_DB
+        value: mgbp-brasil
+      - key: ODOO_USER
+        value: marcus@nytro.com.br
+      - key: ODOO_API_KEY
+        sync: false
+      - key: ODOO_POLLING_MS
+        value: "20000"
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+      - key: FIREBASE_CERT_COLLECTION
+        value: certificados
+      - key: FIREBASE_CERT_DOC_ID
+        value: mgbp-a1
+      - key: NFE_EMISSAO_MODO
+        value: proprio
+      - key: NFE_UF
+        value: PR
+      - key: NFE_TP_AMB
+        value: "2"  # 2=homologação (trocar para 1 após testes SEFAZ)
+      - key: NFE_CERT_KEK
+        sync: false
+      - key: NFE_DANFE_PROVIDER
+        value: local
+      - key: NFE_TLS_INSECURE
+        value: "0"
+      - key: MGBP_REGIME_TRIBUTARIO
+        value: lucro_presumido  # MGBP é Lucro Presumido (CST 00 + IPI 3,25%)
+      - key: MGBP_NCM_PADRAO
+        value: "85166000"  # Fogões/fornos elétricos
+      - key: LOG_LEVEL
+        value: info
+
+  # Cron para manter o serviço "acordado" e fazer polling a cada 5 min
+  - type: cron
+    name: mgbp-brasil-keepalive
+    runtime: node
+    plan: starter
+    schedule: "*/5 * * * *"
+    buildCommand: "true"
+    startCommand: "curl -fs -H 'x-api-key: $API_KEY' $RENDER_EXTERNAL_URL/api/v1/nfe/process-pending || true"
+    envVars:
+      - key: API_KEY
+        sync: false
