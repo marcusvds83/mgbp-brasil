@@ -40,35 +40,29 @@ interface CachedCert {
 }
 let cache: CachedCert | null = null;
 
-// === Inicializacao do Firebase ===
+// === Inicializacao do Firebase (delegada para firebase-config.ts) ===
+// A nova lib firebase-config.ts suporta:
+//   1. Env vars tradicionais (FIREBASE_PROJECT_ID, _CLIENT_EMAIL, _PRIVATE_KEY)
+//   2. JSON inteiro da service account colado em FIREBASE_PRIVATE_KEY (parseado em runtime)
+//   3. Service account persistida no Firestore (via POST /api/v1/firebase/service-account)
+import { initFirebase as initFirebaseFromConfig, getFirestoreDb } from './firebase-config';
+
 let db: any = null;
 let firebaseReady = false;
 
 async function initFirebase(): Promise<void> {
   if (firebaseReady) return;
-  if (!firebaseConfigured()) {
-    console.warn(
-      '[FIREBASE-CERT] Firebase nao configurado. Defina FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL e FIREBASE_PRIVATE_KEY.'
-    );
-    return;
-  }
-  try {
-    const adminLib = await getAdmin();
-    if (adminLib.apps.length === 0) {
-      adminLib.initializeApp({
-        credential: adminLib.credential.cert({
-          projectId: config.firebase.projectId,
-          privateKey: config.firebase.privateKey,
-          clientEmail: config.firebase.clientEmail,
-        }),
-      });
+  const ok = await initFirebaseFromConfig();
+  if (ok) {
+    db = await getFirestoreDb();
+    firebaseReady = !!db;
+    if (firebaseReady) {
+      console.log(`[FIREBASE-CERT] Firebase inicializado. Projeto: ${config.firebase.projectId}`);
     }
-    db = adminLib.firestore();
-    firebaseReady = true;
-    console.log(`[FIREBASE-CERT] Firebase inicializado. Projeto: ${config.firebase.projectId}`);
-  } catch (e) {
-    console.error('[FIREBASE-CERT] Falha ao inicializar Firebase:', (e as Error).message);
-    // Nao lanca erro - deixa o app continuar rodando sem Firebase
+  } else {
+    console.warn(
+      '[FIREBASE-CERT] Firebase nao configurado. Defina FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL e FIREBASE_PRIVATE_KEY (ou cole o JSON inteiro em FIREBASE_PRIVATE_KEY - sera parseado em runtime).'
+    );
   }
 }
 

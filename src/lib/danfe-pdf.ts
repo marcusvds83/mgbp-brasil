@@ -7,6 +7,7 @@
 
 import PDFDocument from 'pdfkit';
 import bwipjs from 'bwip-js';
+import { carregarLogo } from './firebase-config';
 
 export interface DanfeData {
   chave: string;
@@ -51,6 +52,9 @@ export interface DanfeData {
 
 /** Gera o PDF DANFE em Buffer. */
 export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
+  // Carrega logo MGBP do Firebase (se houver)
+  const logoData = await carregarLogo();
+
   return new Promise<Buffer>((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'A4', margin: 20 });
@@ -64,15 +68,39 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
       const margin = 20;
       const colWidth = (pageWidth - margin * 2) / 4;
 
-      // Logo placeholder (caixa com nome da empresa)
-      doc.rect(margin, margin, colWidth * 1.2, 80).stroke();
-      doc.fontSize(8).font('Helvetica-Bold');
-      doc.text(data.emit.nome.toUpperCase(), margin + 4, margin + 4, { width: colWidth * 1.2 - 8 });
+      // Logo MGBP (carregada do Firebase) ou placeholder com nome da empresa
+      const logoBoxW = colWidth * 1.2;
+      const logoBoxH = 80;
+      if (logoData && logoData.buffer) {
+        // Tenta encaixar a logo dentro do box mantendo proporcao
+        try {
+          const img = logoData.buffer;
+          // PDFKit aceita Buffer; dimensiona mantendo aspect ratio dentro do box
+          doc.image(img, margin, margin, {
+            fit: [logoBoxW, logoBoxH],
+            align: 'center',
+            valign: 'center',
+          });
+          // Borda opcional sutil
+          doc.rect(margin, margin, logoBoxW, logoBoxH).strokeColor('#ccc').lineWidth(0.5).stroke();
+        } catch (e) {
+          console.warn('[DANFE-PDF] Falha ao inserir logo:', (e as Error).message);
+          // Fallback: caixa com nome da empresa
+          doc.rect(margin, margin, logoBoxW, logoBoxH).stroke();
+          doc.fontSize(8).font('Helvetica-Bold');
+          doc.text(data.emit.nome.toUpperCase(), margin + 4, margin + 4, { width: logoBoxW - 8 });
+        }
+      } else {
+        // Sem logo: caixa com nome da empresa
+        doc.rect(margin, margin, logoBoxW, logoBoxH).stroke();
+        doc.fontSize(8).font('Helvetica-Bold');
+        doc.text(data.emit.nome.toUpperCase(), margin + 4, margin + 4, { width: logoBoxW - 8 });
+      }
       doc.font('Helvetica').fontSize(7);
-      doc.text(`CNPJ: ${data.emit.cnpj}`, margin + 4, margin + 22, { width: colWidth * 1.2 - 8 });
-      if (data.emit.ie) doc.text(`IE: ${data.emit.ie}`, margin + 4, margin + 34, { width: colWidth * 1.2 - 8 });
+      doc.text(`CNPJ: ${data.emit.cnpj}`, margin + 4, margin + 22, { width: logoBoxW - 8 });
+      if (data.emit.ie) doc.text(`IE: ${data.emit.ie}`, margin + 4, margin + 34, { width: logoBoxW - 8 });
       if (data.emit.endereco) {
-        doc.text(data.emit.endereco, margin + 4, margin + 46, { width: colWidth * 1.2 - 8, height: 30 });
+        doc.text(data.emit.endereco, margin + 4, margin + 46, { width: logoBoxW - 8, height: 30 });
       }
 
       // Titulo DANFE

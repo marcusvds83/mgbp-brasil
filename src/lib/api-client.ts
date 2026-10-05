@@ -100,6 +100,39 @@ export class ApiClient {
     return this.json<{ sucesso: boolean; uid?: number; db?: string; user?: string; url?: string; erro?: string }>('GET', '/api/v1/odoo/test-connection');
   }
 
+  // === Firebase Service Account (persistir JSON inteiro no Firestore) ===
+  getServiceAccountStatus() {
+    return this.json<{ configurado: boolean; origem?: string; projectId?: string; clientEmail?: string; uploadedAt?: string; erro?: string }>('GET', '/api/v1/firebase/service-account');
+  }
+
+  uploadServiceAccount(serviceAccountJson: string) {
+    return this.json<{ sucesso: boolean; info?: any; message?: string; erro?: string }>('POST', '/api/v1/firebase/service-account', { serviceAccountJson });
+  }
+
+  // === Logo MGBP para DANFE ===
+  async uploadLogo(file: File) {
+    const formData = new FormData();
+    formData.append('logo', file);
+    const res = await fetch(this.baseUrl + '/api/v1/mgbp/logo', {
+      method: 'POST',
+      headers: { 'x-api-key': this.apiKey },
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ erro: res.statusText }));
+      throw new Error(err.erro || `HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+
+  getLogoStatus() {
+    return this.json<{ configurado: boolean; size?: number; mimetype?: string; uploadedAt?: string; erro?: string }>('GET', '/api/v1/mgbp/logo');
+  }
+
+  removeLogo() {
+    return this.json<{ sucesso: boolean; mensagem: string }>('DELETE', '/api/v1/mgbp/logo');
+  }
+
   // === Downloads (blob) ===
   downloadXml(moveId: number) {
     return `${this.baseUrl}/api/v1/nfe/dashboard/${moveId}/xml?api_key=${encodeURIComponent(this.apiKey)}`;

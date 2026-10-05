@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Toaster } from "@/components/ui/toaster";
 import { toast } from "@/hooks/use-toast";
-import { FileText, Download, RefreshCw, LogOut, ShieldCheck, AlertTriangle, CheckCircle2, Clock, XCircle, Settings, BookOpen, Database, Cloud, Server, Key, FileBox } from "lucide-react";
+import { FileText, Download, RefreshCw, LogOut, ShieldCheck, AlertTriangle, CheckCircle2, Clock, XCircle, Settings, BookOpen, Database, Cloud, Server, Key, FileBox, Image } from "lucide-react";
 
 // ============================================================
 // Tela de autenticacao (API Key)
@@ -330,21 +330,29 @@ function SetupTab() {
   const [certStatus, setCertStatus] = useState<any>(null);
   const [sefazStatus, setSefazStatus] = useState<any>(null);
   const [odooStatus, setOdooStatus] = useState<any>(null);
+  const [saStatus, setSaStatus] = useState<any>(null);
+  const [logoStatus, setLogoStatus] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [certFile, setCertFile] = useState<File | null>(null);
   const [certSenha, setCertSenha] = useState("");
+  const [saJson, setSaJson] = useState("");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [cs, ss, od] = await Promise.allSettled([
+      const [cs, ss, od, sa, lg] = await Promise.allSettled([
         client.getCertStatus(),
         client.getSefazStatus(),
         client.testOdoo(),
+        client.getServiceAccountStatus(),
+        client.getLogoStatus(),
       ]);
       if (cs.status === "fulfilled") setCertStatus(cs.value);
       if (ss.status === "fulfilled") setSefazStatus(ss.value);
       if (od.status === "fulfilled") setOdooStatus(od.value);
+      if (sa.status === "fulfilled") setSaStatus(sa.value);
+      if (lg.status === "fulfilled") setLogoStatus(lg.value);
     } finally {
       setLoading(false);
     }
@@ -405,6 +413,73 @@ function SetupTab() {
     }
   }
 
+  async function handleUploadServiceAccount(e: React.FormEvent) {
+    e.preventDefault();
+    if (!saJson.trim()) {
+      toast({ title: "Cole o JSON da service account", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    try {
+      const r = await client.uploadServiceAccount(saJson);
+      if (r.sucesso) {
+        toast({
+          title: "Service Account salva!",
+          description: `Project: ${r.info?.projectId} | Email: ${r.info?.clientEmail}`,
+        });
+        setSaJson("");
+        refreshAll();
+      } else {
+        throw new Error(r.erro || "Falha ao salvar");
+      }
+    } catch (e) {
+      toast({ title: "Erro ao salvar service account", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleUploadLogo(e: React.FormEvent) {
+    e.preventDefault();
+    if (!logoFile) {
+      toast({ title: "Selecione uma imagem PNG/JPG", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    try {
+      const r = await client.uploadLogo(logoFile);
+      if (r.sucesso) {
+        toast({
+          title: "Logo salva!",
+          description: `${r.info?.size} bytes (${r.info?.mimetype})`,
+        });
+        setLogoFile(null);
+        (document.getElementById("logo-file") as HTMLInputElement).value = "";
+        refreshAll();
+      } else {
+        throw new Error(r.erro || "Falha no upload");
+      }
+    } catch (e) {
+      toast({ title: "Erro ao enviar logo", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRemoveLogo() {
+    if (!confirm("Remover logo? O DANFE voltara a usar apenas o nome da empresa.")) return;
+    setLoading(true);
+    try {
+      await client.removeLogo();
+      toast({ title: "Logo removida" });
+      refreshAll();
+    } catch (e) {
+      toast({ title: "Erro", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleTestSefaz() {
     setLoading(true);
     try {
@@ -424,6 +499,68 @@ function SetupTab() {
 
   return (
     <div className="space-y-6">
+      {/* Firebase Service Account JSON */}
+      <Card className="bg-card/80 border-border/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Cloud className="w-5 h-5" /> Firebase Service Account
+          </CardTitle>
+          <CardDescription>
+            Cole o conteudo do arquivo .json baixado do Firebase Console (Project Settings &gt; Service Accounts &gt; Generate New Private Key). Mais simples que configurar 3 env vars separadas.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {saStatus?.configurado ? (
+            <div className="p-4 rounded-md bg-emerald-500/10 border border-emerald-500/30 space-y-2">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium">
+                <CheckCircle2 className="w-4 h-4" /> Firebase Configurado
+              </div>
+              <dl className="grid grid-cols-2 gap-2 text-sm">
+                <dt className="text-muted-foreground">Origem:</dt>
+                <dd className="font-medium">{saStatus.origem || "env-vars"}</dd>
+                <dt className="text-muted-foreground">Project ID:</dt>
+                <dd className="font-mono">{saStatus.projectId}</dd>
+                <dt className="text-muted-foreground">Client Email:</dt>
+                <dd className="text-xs font-mono break-all">{saStatus.clientEmail}</dd>
+                {saStatus.uploadedAt && <>
+                  <dt className="text-muted-foreground">Persistido em:</dt>
+                  <dd>{saStatus.uploadedAt?.substring(0, 19).replace("T", " ")}</dd>
+                </>}
+              </dl>
+            </div>
+          ) : (
+            <div className="p-4 rounded-md bg-amber-500/10 border border-amber-500/30">
+              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-medium mb-2">
+                <AlertTriangle className="w-4 h-4" /> Firebase nao configurado
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {saStatus?.erro || "Configure as env vars no Render OU cole o JSON da service account abaixo."}
+              </p>
+            </div>
+          )}
+
+          <form onSubmit={handleUploadServiceAccount} className="space-y-3 pt-2 border-t border-border/50">
+            <div className="space-y-2">
+              <Label htmlFor="sa-json">JSON da Service Account</Label>
+              <Textarea
+                id="sa-json"
+                placeholder={`{"type":"service_account","project_id":"mgbp-brasil","private_key":"-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n","client_email":"firebase-adminsdk-fbsvc@mgbp-brasil.iam.gserviceaccount.com",...}`}
+                value={saJson}
+                onChange={(e) => setSaJson(e.target.value)}
+                disabled={loading}
+                className="font-mono text-xs h-32"
+              />
+              <p className="text-xs text-muted-foreground">
+                Abra o arquivo .json baixado do Firebase num editor de texto, copie TODO o conteudo (Ctrl+A, Ctrl+C) e cole aqui (Ctrl+V).
+              </p>
+            </div>
+            <Button type="submit" disabled={loading || !saJson.trim()}>
+              <Upload className="w-4 h-4 mr-2" /> Salvar Service Account
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
       {/* Certificado A1 */}
       <Card className="bg-card/80 border-border/50">
         <CardHeader>
@@ -489,6 +626,62 @@ function SetupTab() {
             </div>
             <Button type="submit" disabled={loading || !certFile || !certSenha}>
               <Upload className="w-4 h-4 mr-2" /> Enviar Certificado
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Logo MGBP */}
+      <Card className="bg-card/80 border-border/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Image className="w-5 h-5" /> Logo MGBP para DANFE
+          </CardTitle>
+          <CardDescription>Logo da empresa no canto superior esquerdo do DANFE. PNG ou JPG ate 500KB.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {logoStatus?.configurado ? (
+            <div className="p-4 rounded-md bg-emerald-500/10 border border-emerald-500/30 space-y-2">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium">
+                <CheckCircle2 className="w-4 h-4" /> Logo Configurada
+              </div>
+              <dl className="grid grid-cols-2 gap-2 text-sm">
+                <dt className="text-muted-foreground">Tamanho:</dt>
+                <dd>{logoStatus.size} bytes</dd>
+                <dt className="text-muted-foreground">Formato:</dt>
+                <dd>{logoStatus.mimetype}</dd>
+                <dt className="text-muted-foreground">Enviada em:</dt>
+                <dd>{logoStatus.uploadedAt?.substring(0, 19).replace("T", " ")}</dd>
+              </dl>
+              <Button size="sm" variant="destructive" onClick={handleRemoveLogo} disabled={loading}>
+                Remover Logo
+              </Button>
+            </div>
+          ) : (
+            <div className="p-4 rounded-md bg-amber-500/10 border border-amber-500/30">
+              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-medium mb-2">
+                <AlertTriangle className="w-4 h-4" /> Nenhuma logo carregada
+              </div>
+              <p className="text-sm text-muted-foreground">DANFE usara apenas o nome da empresa no cabecalho.</p>
+            </div>
+          )}
+
+          <form onSubmit={handleUploadLogo} className="space-y-3 pt-2 border-t border-border/50">
+            <div className="space-y-2">
+              <Label htmlFor="logo-file">Arquivo de imagem</Label>
+              <Input
+                id="logo-file"
+                type="file"
+                accept="image/png,image/jpeg,image/jpg"
+                onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+                disabled={loading}
+              />
+              <p className="text-xs text-muted-foreground">
+                Recomendado: PNG transparente, 200x80 pixels, max 500KB. Será encaixado no canto superior esquerdo do DANFE.
+              </p>
+            </div>
+            <Button type="submit" disabled={loading || !logoFile}>
+              <Upload className="w-4 h-4 mr-2" /> Enviar Logo
             </Button>
           </form>
         </CardContent>
