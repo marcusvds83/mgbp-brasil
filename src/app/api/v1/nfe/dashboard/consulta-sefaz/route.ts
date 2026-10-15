@@ -3,19 +3,15 @@
  *     ou ?chave=XXXX
  *
  * Consulta NF-e na SEFAZ pelo serviço NFeConsultaProtocolo4.
+ * Usa mTLS com certificado A1 + cadeia ICP-Brasil (mesmo agent do sefaz-client).
  * Retorna: cStat, xMotivo, nProt, dhRecBto, chNFe, situação atual.
- *
- * Caso de uso: NF-e foi emitida mas perdeu o protocolo no Odoo, ou para
- * verificar se uma NF foi cancelada por outra via, etc.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyApiKey } from '@/lib/auth';
-import { read } from '@/lib/odoo-rpc';
+import { read, write } from '@/lib/odoo-rpc';
 import { sefazHelpers } from '@/lib/sefaz-client';
-import { carregarCertificado } from '@/lib/firebase-cert';
 import { config, isHomolog } from '@/lib/config';
-import https from 'https';
 import axios from 'axios';
 
 const NS = 'http://www.portalfiscal.inf.br/nfe';
@@ -38,7 +34,6 @@ export async function GET(req: NextRequest) {
   let chave = chaveParam;
 
   try {
-    // Se não passou chave, busca no Odoo pelo move_id
     if (!chave && moveId) {
       const moves = await read<any>('account.move', [moveId], [
         'name', 'x_mgbp_nfe_chave', 'x_mgbp_nfe_protocolo',
@@ -61,11 +56,8 @@ export async function GET(req: NextRequest) {
       return jsonOrHtml(redirect, { sucesso: false, erro: 'Chave NF-e invalida ou ausente (44 digitos)' }, 400);
     }
 
-    // Carrega certificado
-    const cert = await carregarCertificado();
-    if (!cert) {
-      return jsonOrHtml(redirect, { sucesso: false, erro: 'Certificado A1 nao configurado' }, 400);
-    }
+    // Usa o agent mTLS do sefaz-client (com CAs ICP-Brasil)
+    const httpsAgent = await sefazHelpers.agentAsync();
 
     // Monta XML de consulta
     const cons =
@@ -83,20 +75,6 @@ export async function GET(req: NextRequest) {
       '<soap12:Body>' +
       `<nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4">${cons}</nfeDadosMsg>` +
       '</soap12:Body></soap12:Envelope>';
-
-    const extraCas: string[] = [];
-    if (cert.chainPem && cert.chainPem.length > 1) {
-      for (let i = 1; i < cert.chainPem.length; i++) {
-        if (!extraCas.includes(cert.chainPem[i])) extraCas.push(cert.chainPem[i]);
-      }
-    }
-    const httpsAgent = new https.Agent({
-      minVersion: 'TLSv1.2' as any,
-      key: cert.privateKeyPem,
-      cert: cert.chainPem && cert.chainPem.length ? cert.chainPem.join('') : cert.certPem,
-      ca: extraCas as any,
-      rejectUnauthorized: !config.nfe.tlsInsecure,
-    });
 
     const url = sefazHelpers.endpoint('consulta');
     console.log(`[CONSULTA-SEFAZ] Consultando chave ${chave} em ${url}`);
@@ -121,12 +99,6 @@ export async function GET(req: NextRequest) {
     const xEvento = tag(resp.data, 'xEvento');
     const nSeqEvento = tag(resp.data, 'nSeqEvento');
 
-    // Códigos comuns:
-    // 100 = Autorizada
-    // 101 = Cancelamento
-    // 110 = Uso denegado
-    // 301 = Uso denegado (restrincao)
-    // 220 =NF-e cancelada por substituicao
     let situacao = 'desconhecida';
     if (cStat === '100' || cStat === '150') situacao = 'autorizada';
     else if (cStat === '101' || cStat === '102' || cStat === '135' || cStat === '155') situacao = 'cancelada';
@@ -139,7 +111,7 @@ export async function GET(req: NextRequest) {
       cStat,
       xMotivo,
       situacao,
-      nProt: nProt,
+      nProt,
       dhRecBto,
       chNFe,
       evento: tpEvento ? { tpEvento, xEvento, nSeqEvento } : undefined,
@@ -149,12 +121,11 @@ export async function GET(req: NextRequest) {
       httpStatus: resp.status,
     };
 
-    // Se tem moveId e protocolo retornado difere do que está no Odoo, atualiza
+    // Atualiza protocolo no Odoo se for diferente
     if (moveId && nProt) {
       try {
         const moves = await read<any>('account.move', [moveId], ['x_mgbp_nfe_protocolo']);
         if (moves && moves[0] && moves[0].x_mgbp_nfe_protocolo !== nProt) {
-          const { write } = await import('@/lib/odoo-rpc');
           await write('account.move', [moveId], { x_mgbp_nfe_protocolo: nProt });
           console.log(`[CONSULTA-SEFAZ] Protocolo atualizado no Odoo: ${nProt}`);
         }

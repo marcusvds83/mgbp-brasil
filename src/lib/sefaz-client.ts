@@ -93,7 +93,7 @@ function agent(): https.Agent {
   throw new Error('Use agentAsync() em vez de agent() - certificado e assincrono');
 }
 
-async function agentAsync(): Promise<https.Agent> {
+export async function agentAsync(): Promise<https.Agent> {
   const cert = await carregarCertificado();
   if (!cert) {
     throw new Error('Certificado A1 nao configurado - impossivel abrir conexao mTLS com a SEFAZ.');
@@ -358,4 +358,5 @@ export const sefazHelpers = {
   uf,
   tpAmb,
   cUF,
+  agentAsync,
 };
