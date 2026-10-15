@@ -555,7 +555,7 @@ export function gerarXmlNFe(data: NFeData): string {
   const pag = `<pag>` +
     `<detPag>` +
     `<indPag>${indPag}</indPag>` +
-    `<tPag>99</tPag>` +
+    `<tPag>01</tPag>` +
     `<vPag>${formatNum(vNF, 2)}</vPag>` +
     `</detPag>` +
     `</pag>`;
