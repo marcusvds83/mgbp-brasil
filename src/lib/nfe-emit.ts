@@ -539,7 +539,7 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
     dest: {
       cnpj: partner._cnpj,
       cpf: partner._cpf,
-      xName: partner.legal_name || partner.name,
+      xNome: partner.legal_name || partner.name,
       xLgr: partner.street,
       nro: partner.street2,
       xBairro: (partner.district as string),
