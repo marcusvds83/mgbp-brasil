@@ -305,7 +305,11 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
     company._cidade = company.city;
   }
   if (company.state_id) {
-    company._uf = company.state_id[1] || '';
+    const stateIdComp = Array.isArray(company.state_id) ? company.state_id[0] : company.state_id;
+    try {
+      const stateComp = await read('res.country.state', [stateIdComp], ['code', 'name']);
+      company._uf = stateComp[0]?.code || 'PR';
+    } catch (e) { company._uf = 'PR'; }
   } else if (company.state) {
     company._uf = company.state;
   }
@@ -343,7 +347,11 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
     partner._cidade = partner.city;
   }
   if (partner.state_id) {
-    partner._uf = partner.state_id[1] || '';
+    const stateIdPart = Array.isArray(partner.state_id) ? partner.state_id[0] : partner.state_id;
+    try {
+      const statePart = await read('res.country.state', [stateIdPart], ['code', 'name']);
+      partner._uf = statePart[0]?.code || '';
+    } catch (e) { partner._uf = ''; }
   } else if (partner.state) {
     partner._uf = partner.state;
   }
@@ -362,7 +370,7 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
     'x_mgbp_descricao_nfe',
     'x_mgbp_unidade_medida',
   ]);
-  const serviceLines = allLines.filter((l) => !l.display_type && l.price_subtotal > 0);
+  const serviceLines = allLines.filter((l) => (!l.display_type || l.display_type === 'product') && l.price_subtotal > 0);
 
   // 9. Leitura dos produtos (com campos MGBP)
   const productIds = serviceLines
@@ -496,7 +504,7 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
 
   // 13. Monta dados do NFe
   const serie = (company.x_mgbp_nfe_serie as string) || config.nfe.seriePadrao;
-  const dhEmi = new Date().toISOString();
+  const dhEmi = new Date().toISOString().substring(0, 19) + '-03:00';
   const totalNF = move.amount_total;
 
   // Extrai IE do emitente
