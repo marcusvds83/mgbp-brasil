@@ -519,6 +519,8 @@ export function gerarXmlNFe(data: NFeData): string {
   const det = data.produtos.map((p) => tagProduto(p)).join('');
 
   // Total
+  const vPIS = data.produtos.reduce((s, p) => s + ((p.vProd || 0) * 0.0065), 0);
+  const vCOFINS = data.produtos.reduce((s, p) => s + ((p.vProd || 0) * 0.03), 0);
   const total = `<total>` +
     `<ICMSTot>` +
     `<vBC>${formatNum(vProd, 2)}</vBC>` +
@@ -536,8 +538,8 @@ export function gerarXmlNFe(data: NFeData): string {
     `<vII>0.00</vII>` +
     `<vIPI>${formatNum(vIPI, 2)}</vIPI>` +
     `<vIPIDevol>0.00</vIPIDevol>` +
-    `<vPIS>0.00</vPIS>` +
-    `<vCOFINS>0.00</vCOFINS>` +
+    `<vPIS>${formatNum(vPIS, 2)}</vPIS>` +
+    `<vCOFINS>${formatNum(vCOFINS, 2)}</vCOFINS>` +
     `<vOutro>${formatNum(data.vOutro || 0, 2)}</vOutro>` +
     `<vNF>${formatNum(vNF, 2)}</vNF>` +
     `</ICMSTot>` +
