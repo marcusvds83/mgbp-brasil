@@ -611,6 +611,12 @@ export function gerarXmlNFe(data: NFeData): string {
     transp +
     pag +
     infAdic +
+    `<infRespTec>` +
+    `<CNPJ>20728251000102</CNPJ>` +
+    `<xContato>Marcus Vinicius - NYTRO</xContato>` +
+    `<email>marcus@nytro.com.br</email>` +
+    `<fone>4133878889</fone>` +
+    `</infRespTec>` +
     `</infNFe>` +
     `</NFe>`;
 
