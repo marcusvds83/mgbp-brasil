@@ -339,7 +339,10 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
   } else {
     partner._cnpj = cnpjPartner;
     partner._cpf = '';
-    partner._ie = partner.l10n_br_ie_code || (partner.vat ? String(partner.vat) : '');
+    // IMPORTANTE: se l10n_br_ie_code estiver em branco, NÃO usar VAT como fallback.
+    // VAT é CNPJ (14 dígitos), não IE - isso causaria rejeição 210 da SEFAZ.
+    // IE deve ser vazio quando o parceiro PJ não tem IE cadastrada.
+    partner._ie = (partner.l10n_br_ie_code as string) || '';
   }
   if (partner.city_id) {
     partner._cidade = partner.city_id[1] || '';
