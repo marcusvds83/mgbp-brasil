@@ -273,7 +273,8 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
   const move = moves[0];
 
   // 5. Validação do estoque origem (apenas 01, 03, 11 podem emitir NF)
-  const estoqueId = move.x_mgbp_nfe_estoque_origem as number | undefined;
+  const estoqueRaw = move.x_mgbp_nfe_estoque_origem as any;
+    const estoqueId = Array.isArray(estoqueRaw) ? estoqueRaw[0] as number : (estoqueRaw as number | undefined);
   if (!estoqueId) {
     throw new Error('Estoque de origem NF-e não preenchido. Selecione um dos estoques 01, 03 ou 11.');
   }
