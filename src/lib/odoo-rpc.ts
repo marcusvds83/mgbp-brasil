@@ -96,7 +96,9 @@ export async function executeKw<T = unknown>(
   );
 }
 
-/** search_read (Odoo 17+) ou search+read (Odoo 19) - wrapper compativel. */
+/** search_read (Odoo 17+) ou search+read (Odoo 19/20) - wrapper compativel.
+ * Odoo 20+ mudou: limit/offset/order DEVEM ser kwargs, NÃO positional args.
+ */
 export async function searchRead<T = Record<string, unknown>>(
   model: string,
   domain: unknown[],
@@ -105,37 +107,36 @@ export async function searchRead<T = Record<string, unknown>>(
 ): Promise<T[]> {
   // Tenta search_read primeiro (funciona na maioria das versoes)
   try {
+    const kwargs: Record<string, unknown> = {};
+    if (opts.limit !== undefined && opts.limit > 0) kwargs.limit = opts.limit;
+    if (opts.offset !== undefined && opts.offset > 0) kwargs.offset = opts.offset;
+    if (opts.order) kwargs.order = opts.order;
     const result = await executeKw<T[]>(model, 'search_read', [
       domain,
       fields,
-      opts.limit ?? 0,
-      opts.offset ?? 0,
-    ], opts.order ? { order: opts.order } : {});
+    ], kwargs);
     return result;
   } catch (e) {
     // Fallback: search + read (Odoo 19+)
     console.warn(`[ODOO] search_read falhou para ${model}, fallback search+read: ${(e as Error).message}`);
-    const ids = await executeKw<number[]>(model, 'search', [
-      domain,
-      opts.limit ?? 0,
-      opts.offset ?? 0,
-    ], opts.order ? { order: opts.order } : {});
+    const ids = await search(model, domain, opts);
     if (!ids || !ids.length) return [];
-    return await executeKw<T[]>(model, 'search_read', [[['id', 'in', ids]], fields]);
+    return await read<T>(model, ids, fields);
   }
 }
 
-/** search() - retorna IDs. */
+/** search() - retorna IDs.
+ * Odoo 20+: limit/offset DEVEM ser kwargs. Em kwargs, undefined não é enviado ( Odoo ignora). */
 export async function search(
   model: string,
   domain: unknown[],
   opts: { limit?: number; offset?: number; order?: string } = {}
 ): Promise<number[]> {
-  return executeKw<number[]>(model, 'search', [
-    domain,
-    opts.limit ?? 0,
-    opts.offset ?? 0,
-  ], opts.order ? { order: opts.order } : {});
+  const kwargs: Record<string, unknown> = {};
+  if (opts.limit !== undefined && opts.limit > 0) kwargs.limit = opts.limit;
+  if (opts.offset !== undefined && opts.offset > 0) kwargs.offset = opts.offset;
+  if (opts.order) kwargs.order = opts.order;
+  return executeKw<number[]>(model, 'search', [domain], kwargs);
 }
 
 /** read() - le registros por IDs. */

@@ -228,7 +228,7 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
       doc.text(data.emit.nome.toUpperCase(), MARGIN + 2, y + 52, { width: col2A - 4, height: 10 });
 
       // Endereço emitente
-      const end = [];
+      const end: string[] = [];
       if (data.emit.endereco) end.push(`${data.emit.endereco}${data.emit.numero ? ', ' + data.emit.numero : ''}`);
       if (data.emit.complemento) end.push(data.emit.complemento);
       if (data.emit.bairro) end.push(data.emit.bairro);
@@ -237,7 +237,7 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
       doc.text(endStr, MARGIN + 2, y + 62, { width: col2A - 4, height: 7 });
 
       // Cidade/UF
-      const cidadeUf = [];
+      const cidadeUf: string[] = [];
       if (data.emit.cidade) cidadeUf.push(`${data.emit.cidade} - ${data.emit.uf || ''}`);
       doc.text(cidadeUf.join(' - '), MARGIN + 2, y + 70, { width: col2A - 4, height: 7 });
 
@@ -247,7 +247,7 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
       doc.text(`C.N.P.J./C.P.F. ${cnpjEmit}`, MARGIN + 2, y + 78, { width: col2A - 4, height: 7 });
 
       // FONE + CEP
-      const foneCep = [];
+      const foneCep: string[] = [];
       if (data.emit.fone) foneCep.push(`FONE ${formatFone(data.emit.fone)}`);
       if (data.emit.cep) foneCep.push(`CEP ${formatCep(data.emit.cep)}`);
       doc.text(foneCep.join('         '), MARGIN + 2, y + 86, { width: col2A - 4, height: 5 });
@@ -423,7 +423,8 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
 
       doc.font(FONT_REG).fontSize(5.5);
       doc.text('ENDEREÇO', MARGIN + 2, y5l2 + 1, { width: w5d - 4, height: 7 });
-      const endDest = [];
+      // Endereço dest
+      const endDest: string[] = [];
       if (data.dest?.endereco) endDest.push(data.dest.endereco);
       if (data.dest?.numero) endDest.push(data.dest.numero);
       if (data.dest?.complemento) endDest.push(data.dest.complemento);
@@ -745,12 +746,12 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
         { label: 'V. IPI', w: w * 0.06 },
       ];
 
-      let cx = MARGIN;
+      let cxProd = MARGIN;
       cols10.forEach((c, i) => {
-        if (i > 0) doc.moveTo(cx, y10h).lineTo(cx, y + h10).stroke(COLOR_BORDER);
+        if (i > 0) doc.moveTo(cxProd, y10h).lineTo(cxProd, y + h10).stroke(COLOR_BORDER);
         doc.font(FONT_BOLD).fontSize(5);
-        doc.text(c.label, cx + 1, y10h + 1, { width: c.w - 2, height: 12 });
-        cx += c.w;
+        doc.text(c.label, cxProd + 1, y10h + 1, { width: c.w - 2, height: 12 });
+        cxProd += c.w;
       });
 
       // Itens
@@ -758,7 +759,7 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
       const maxItens = data.produtos.length;
       for (let i = 0; i < maxItens && y10 < y + h10 - 12; i++) {
         const p = data.produtos[i];
-        cx = MARGIN;
+        cxProd = MARGIN;
         const rowVals = [
           { val: p.codProd, w: cols10[0].w },
           { val: p.descricao, w: cols10[1].w },
@@ -778,20 +779,22 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
           // Descrição usa mais altura
           const isDesc = rv === rowVals[1];
           const h = isDesc ? 12 : 8;
-          doc.text(rv.val, cx + 1, y10, { width: rv.w - 2, height: h });
-          cx += rv.w;
+          doc.text(rv.val, cxProd + 1, y10, { width: rv.w - 2, height: h });
+          cxProd += rv.w;
         });
         // Aliquotas em linha separada abaixo do item
-        cx = MARGIN;
+        cxProd = MARGIN;
         // Aliq. ICMS e Aliq. IPI ficam abaixo
         const y10b = y10 + 10;
-        const aliqW1 = cols10.slice(0, 10).reduce((a, b) => a + b.w, 0);
-        const aliqW2 = cols10[10].w;
-        const aliqW3 = cols10[11].w;
         // Linha horizontal separadora entre itens
         if (i < maxItens - 1) {
           doc.moveTo(MARGIN, y10b + 4).lineTo(MARGIN + w, y10b + 4).stroke(COLOR_BORDER);
         }
+        // Aliquotas ICMS/IPI na linha abaixo
+        doc.font(FONT_REG).fontSize(5);
+        let aliqXCx = MARGIN;
+        for (let j = 0; j < cols10.length; j++) aliqXCx += cols10[j].w;
+        // Alíquotas são mostradas inline no item acima (já incluídas)
         y10 = y10b + 6;
       }
 

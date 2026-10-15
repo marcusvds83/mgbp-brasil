@@ -88,6 +88,10 @@ export async function initFirebase(): Promise<boolean> {
   }
 
   _firebaseReady = true;
+  // _db é o firebaseRest (cliente REST API). Setado aqui para que as funções
+  // que checam `if (!_db)` funcionem corretamente (antes estava sendo
+  // esquecido, fazendo com que 'salvarLogo' falhasse com 'Firebase nao inicializado').
+  _db = firebaseRest;
   console.log('[FIREBASE-CONFIG] Firebase PRONTO (REST API). Project: ' + process.env.FIREBASE_PROJECT_ID);
   return true;
 }

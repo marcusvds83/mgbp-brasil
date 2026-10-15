@@ -101,12 +101,12 @@ export async function GET(req: NextRequest) {
     const t0 = Date.now();
     console.log(`[NFE-WEB] Emitir solicitado para move_id=${moveId} via redirect Odoo`);
 
-    const resultado = await Promise.race([
+    const resultado = (await Promise.race([
       emitirNfeOdoo(moveId),
-      new Promise<{ sucesso: false; erro: string }>((resolve) =>
+      new Promise<{ sucesso: false; erro: string; cStat?: string; xMotivo?: string }>((resolve) =>
         setTimeout(() => resolve({ sucesso: false, erro: 'Timeout: emissão demorou mais de 85s. Tente novamente.' }), 85000)
       ),
-    ]);
+    ])) as { sucesso: boolean; chave?: string; protocolo?: string; cStat?: string; xMotivo?: string; erro?: string };
 
     const duracao = Date.now() - t0;
     console.log(`[NFE-WEB] Resultado move_id=${moveId}: sucesso=${resultado.sucesso} em ${duracao}ms`);
