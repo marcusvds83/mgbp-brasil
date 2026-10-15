@@ -320,7 +320,7 @@ function NfListTable({ nfs, onRefresh }: { nfs: NfItem[]; onRefresh: () => void 
                         <RefreshCw className={`w-3.5 h-3.5 ${loading === nf.id ? "animate-spin" : ""}`} />
                       </Button>
                     )}
-                    {nf.status === "autorizada" && (
+                    {(nf.status === "autorizada" || nf.status === "cancelada" || nf.status === "cancelar_solicitado") && nf.chave && (
                       <>
                         <a href={client.downloadXml(nf.id)} target="_blank" rel="noopener noreferrer">
                           <Button size="sm" variant="ghost" title="Baixar XML">
