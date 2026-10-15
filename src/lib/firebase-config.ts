@@ -73,119 +73,23 @@ let _firebaseReady = false;
  * exceto se houver arquivo config/firebase-service-account.json local).
  */
 export async function initFirebase(): Promise<boolean> {
-  if (_firebaseReady && _db) return true;
+  // REST API é stateless - só verifica se env vars estão preenchidas
+  // Não precisa de firebase-admin SDK (evita bugs de gRPC/OpenSSL/apps.forEach)
+  if (_firebaseReady) return true;
 
-  const adminLib = await getAdmin();
-
-  // Strategy 1: usa env vars direto
   const envOk =
     !!process.env.FIREBASE_PROJECT_ID &&
     !!process.env.FIREBASE_CLIENT_EMAIL &&
     !!process.env.FIREBASE_PRIVATE_KEY;
 
-  if (envOk) {
-    // Verifica se FIREBASE_PRIVATE_KEY é JSON inteiro (caso comum)
-    let projectId = process.env.FIREBASE_PROJECT_ID!;
-    let clientEmail = process.env.FIREBASE_CLIENT_EMAIL!;
-    let privateKey = config.firebase.privateKey;
-
-    // Se a private key parece ser o JSON inteiro da service account, parseia
-    if (privateKey.trim().startsWith('{') && privateKey.includes('"private_key"')) {
-      console.log('[FIREBASE-CONFIG] FIREBASE_PRIVATE_KEY contem JSON inteiro, parseando...');
-      try {
-        const saJson = JSON.parse(privateKey);
-        projectId = saJson.project_id || projectId;
-        clientEmail = saJson.client_email || clientEmail;
-        privateKey = saJson.private_key || '';
-        console.log(
-          `[FIREBASE-CONFIG] JSON parseado: projectId=${projectId}, email=${clientEmail}, key.length=${privateKey.length}`
-        );
-      } catch (e) {
-        console.error('[FIREBASE-CONFIG] Erro ao parsear JSON da private key:', (e as Error).message);
-      }
-    }
-
-    // Normaliza \n literal para quebras reais (Firebase exige)
-    if (privateKey.includes('\\n')) {
-      privateKey = privateKey.replace(/\\n/g, '\n');
-    }
-
-    // Valida formato
-    if (
-      !privateKey.includes('-----BEGIN PRIVATE KEY-----') ||
-      !privateKey.includes('-----END PRIVATE KEY-----')
-    ) {
-      console.error(
-        '[FIREBASE-CONFIG] PRIVATE_KEY invalida: deve conter "-----BEGIN PRIVATE KEY-----" e "-----END PRIVATE KEY-----"'
-      );
-      console.error(
-        '[FIREBASE-CONFIG] Se colou o JSON inteiro da service account, use o painel web (Setup > Service Account JSON).'
-      );
-      // Estrategicamente, deixa _firebaseReady = false para tentar strategy 2 abaixo
-    } else {
-      try {
-        // Limpa apps existentes para evitar erro de já inicializado
-        adminLib.apps.forEach((app) => app?.delete().catch(() => {}));
-        adminLib.initializeApp({
-          credential: adminLib.credential.cert({
-            projectId,
-            privateKey,
-            clientEmail,
-          }),
-        });
-        _db = adminLib.firestore();
-        _firebaseReady = true;
-        cachedSA = { projectId, clientEmail, privateKey };
-        console.log(
-          `[FIREBASE-CONFIG] Firebase inicializado via ENV VARS. Project: ${projectId}`
-        );
-        return true;
-      } catch (e: any) {
-        console.error(
-          '[FIREBASE-CONFIG] Falha ao inicializar Firebase via env vars:',
-          e.message
-        );
-        // Continua para strategy 2
-      }
-    }
+  if (!envOk) {
+    console.warn('[FIREBASE-CONFIG] Env vars ausentes');
+    return false;
   }
 
-  // Strategy 2: carrega service account persistida do Firestore
-  // Mas pra isso precisa ter o Firebase inicializado... quebra de ciclo.
-  // Solução: se houver arquivo config/firebase-service-account.json local
-  // ou variável FIREBASE_SERVICE_ACCOUNT_JSON, usa.
-  const saJsonEnv = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (saJsonEnv) {
-    try {
-      const sa = JSON.parse(saJsonEnv);
-      adminLib.apps.forEach((app) => app?.delete().catch(() => {}));
-      adminLib.initializeApp({
-        credential: adminLib.credential.cert({
-          projectId: sa.project_id,
-          privateKey: sa.private_key.replace(/\\n/g, '\n'),
-          clientEmail: sa.client_email,
-        }),
-      });
-      _db = adminLib.firestore();
-      _firebaseReady = true;
-      cachedSA = {
-        projectId: sa.project_id,
-        clientEmail: sa.client_email,
-        privateKey: sa.private_key.replace(/\\n/g, '\n'),
-      };
-      console.log(
-        `[FIREBASE-CONFIG] Firebase inicializado via FIREBASE_SERVICE_ACCOUNT_JSON. Project: ${sa.project_id}`
-      );
-      return true;
-    } catch (e: any) {
-      console.error(
-        '[FIREBASE-CONFIG] Falha ao inicializar via FIREBASE_SERVICE_ACCOUNT_JSON:',
-        e.message
-      );
-    }
-  }
-
-  return false;
+  _firebaseReady = true;
+  console.log('[FIREBASE-CONFIG] Firebase PRONTO (REST API). Project: ' + process.env.FIREBASE_PROJECT_ID);
+  return true;
 }
 
 /**
