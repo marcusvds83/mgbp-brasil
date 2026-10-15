@@ -1,20 +1,23 @@
 /**
  * src/lib/danfe-pdf.ts - Gerador de DANFE (PDF) para NF-e MGBP Brasil
  * =====================================================================
- * Layout fiel ao DANFE oficial emitido pelo eDocs/Senior (referência: NF 5515).
- * A4 retrato, 1 página, todos os blocos do DANFE oficial:
- *   1. RECEBEMOS + NF-e + número + série
- *   2. Logo emitente + DANFE + chave de acesso + nº série + folha
- *   3. Natureza operação + protocolo
- *   4. IE emitente + IEST + CNPJ emitente
- *   5. DESTINATÁRIO / REMETENTE (3 linhas)
- *   6. FATURA / DUPLICATAS
- *   7. CÁLCULO DO IMPOSTO (2 linhas x 6 col)
- *   8. TRANSPORTADOR / VOLUMES (3 linhas)
- *   9. CÁLCULO DO ISSQN
- *   10. DADOS DOS PRODUTOS / SERVIÇOS (tabela)
- *   11. DADOS ADICIONAIS (info compl + fisco)
- *   12. Rodapé (gerador)
+ * Layout fiel ao DANFE oficial emitido pelo eDocs/Senior.
+ * A4 retrato (595x842 pts), 1 página, fonte Helvetica compacta.
+ *
+ * Estrutura vertical (de cima para baixo), todas as alturas em pts:
+ *   1. RECEBEMOS (28) + NF-e + número + série
+ *   2. Cabeçalho (110): logo + nome empresa + DANFE + barcode + chave + nº/serie/folha
+ *   3. Natureza operação + protocolo (20)
+ *   4. IE emitente + IEST + CNPJ (14)
+ *   5. DESTINATÁRIO (52): 3 linhas com nome/cnpj/data, end/bairro/cep, munic/fone/uf/ie/hora
+ *   6. FATURA/DUPLICATAS (28)
+ *   7. CÁLCULO IMPOSTO (32): 2 linhas x 6 colunas
+ *   8. TRANSPORTADOR (38): 3 linhas x 6 colunas
+ *   9. ISSQN (14)
+ *  10. DADOS DOS PRODUTOS (80): cabeçalho + itens
+ *  11. DADOS ADICIONAIS (80): info compl + fisco
+ *  12. Rodapé
+ * Total: ~600 pts + margens = 1 página A4
  */
 
 import PDFDocument from 'pdfkit';
@@ -64,7 +67,7 @@ export interface DanfeEndereco {
 
 export interface DanfeTransportadora {
   nome?: string;
-  fretePorConta?: string; // '0' (CIF remetente) | '1' (FOB dest) | '2' (terceiros) | '9' (sem frete)
+  fretePorConta?: string;
   cnpj?: string;
   ie?: string;
   endereco?: string;
@@ -88,17 +91,12 @@ export interface DanfeData {
   dhEmi: string;
   folhaAtual: number;
   folhaTotal: number;
-  tpNF: string; // '0' entrada, '1' saida
+  tpNF: string;
   natOp: string;
-  // Emitente
   emit: DanfeEndereco;
-  // Destinatário
   dest?: DanfeEndereco;
-  // Transportadora
   transportadora?: DanfeTransportadora;
-  // Duplicatas
   duplicatas?: DanfeDuplicata[];
-  // Totais (impostos)
   vProd?: number;
   vFrete?: number;
   vSeg?: number;
@@ -111,24 +109,23 @@ export interface DanfeData {
   vBCST?: number;
   vST?: number;
   vTotTrib?: number;
-  // Produtos
   produtos: DanfeProduto[];
-  // Protocolo
   protocolo?: string;
   dhAutorizacao?: string;
-  // Mensagem adicional (rodapé do topo)
   mensagemConsulta?: string;
   infCpl?: string;
   infCplFisco?: string;
-  // Origem (opcional)
-  origem?: string; // 'edocs' | 'middleware' | 'sefaz'
+  origem?: string;
 }
 
-const PAGE_W = 595.28; // A4 largura
-const PAGE_H = 841.89; // A4 altura
-const MARGIN = 8;
+const PAGE_W = 595.28;
+const PAGE_H = 841.89;
+const MARGIN = 5;
 
-/** Gera o PDF DANFE em Buffer - layout fiel ao DANFE oficial. */
+const FONT_BOLD = 'Helvetica-Bold';
+const FONT_REG = 'Helvetica';
+
+/** Gera o PDF DANFE em Buffer - layout compacto em 1 página. */
 export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
   const logoData = await carregarLogo();
   return new Promise<Buffer>((resolve, reject) => {
@@ -147,389 +144,335 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Cores e fontes padrão
-      const FONT_BOLD = 'Helvetica-Bold';
-      const FONT_REG = 'Helvetica';
-      const COLOR_BORDER = '#000000';
-      const COLOR_BG_HEADER = '#e8e8e8';
-
       let y = MARGIN;
       const w = PAGE_W - 2 * MARGIN;
+      const BORDER = '#000000';
+
+      // Helper para desenhar bloco com borda + linhas verticais + labels + valores
+      const drawCell = (
+        x: number, yTop: number, cellW: number, cellH: number,
+        label: string, value: string,
+        opts: { labelFont?: typeof FONT_BOLD; valFont?: typeof FONT_BOLD; labelSize?: number; valSize?: number; align?: 'left' | 'right' | 'center'; multiline?: boolean } = {}
+      ) => {
+        const lf = opts.labelFont || FONT_REG;
+        const vf = opts.valFont || FONT_BOLD;
+        const ls = opts.labelSize || 5;
+        const vs = opts.valSize || 7;
+        const align = opts.align || 'left';
+        doc.font(lf).fontSize(ls);
+        doc.text(label, x + 1, yTop + 1, { width: cellW - 2, height: 7, align: 'left' });
+        doc.font(vf).fontSize(vs);
+        const valY = yTop + 7;
+        const valH = cellH - 8;
+        if (opts.multiline) {
+          doc.text(value, x + 1, valY, { width: cellW - 2, height: valH, align: 'left' });
+        } else {
+          doc.text(value, x + 1, valY, { width: cellW - 2, height: valH, align });
+        }
+      };
+
+      // Helper para divisórias verticais dentro de um bloco
+      const vDividers = (x: number, yTop: number, yBottom: number, xs: number[]) => {
+        for (const px of xs) {
+          doc.moveTo(x + px, yTop).lineTo(x + px, yBottom).stroke(BORDER);
+        }
+      };
+
+      // Helper para divisória horizontal
+      const hDivider = (x: number, y: number, w: number) => {
+        doc.moveTo(x, y).lineTo(x + w, y).stroke(BORDER);
+      };
 
       // ============================================================
-      // BLOCO 1: RECEBEMOS + NF-e + NUMERO + SERIE
+      // BLOCO 1: RECEBEMOS + NF-e + NUMERO + SERIE (28 pts)
       // ============================================================
       const h1 = 28;
-      // 3 colunas: RECEBEMOS (esquerda larga) | NF-e topo | numero/serie
-      const colA = 60; // largura primeira coluna interna RECEBEMOS
-      const colNF = 60; // largura segunda coluna NF-e
+      doc.rect(MARGIN, y, w, h1).stroke(BORDER);
+      const w1a = w * 0.78; // RECEBEMOS
+      const w1b = 22; // NF-e
+      // Linha vertical
+      doc.moveTo(MARGIN + w1a, y).lineTo(MARGIN + w1a, y + h1).stroke(BORDER);
+      doc.moveTo(MARGIN + w1a + w1b, y).lineTo(MARGIN + w1a + w1b, y + h1).stroke(BORDER);
 
-      doc.rect(MARGIN, y, w, h1).stroke(COLOR_BORDER);
-      doc.font(FONT_REG).fontSize(5.5);
-      // Coluna RECEBEMOS (esquerda, mais larga)
-      const recebaW = w - 80;
+      // RECEBEMOS
+      doc.font(FONT_REG).fontSize(5);
       doc.text('RECEBEMOS OS PRODUTOS CONSTANTES DA NOTA FISCAL INDICADA AO LADO DE:',
-        MARGIN + 2, y + 4, { width: recebaW - 4, height: 14 });
+        MARGIN + 2, y + 2, { width: w1a - 4, height: 8 });
       doc.font(FONT_BOLD).fontSize(6);
-      doc.text(data.emit.nome.toUpperCase(), MARGIN + 2, y + 16, { width: recebaW - 4, height: 10 });
+      doc.text((data.emit.nome || '').toUpperCase(), MARGIN + 2, y + 11, { width: w1a - 4, height: 10 });
+      doc.font(FONT_REG).fontSize(5);
+      doc.text('DATA DE RECEBIMENTO', MARGIN + 2, y + 22, { width: w1a - 4, height: 5 });
+      doc.text('IDENTIFICAÇÃO E ASSINATURA DO RECEBEDOR', MARGIN + 80, y + 22, { width: w1a - 80, height: 5 });
 
-      // Linha vertical separadora
-      doc.moveTo(MARGIN + recebaW, y).lineTo(MARGIN + recebaW, y + h1).stroke(COLOR_BORDER);
+      // NF-e
+      doc.font(FONT_BOLD).fontSize(9);
+      doc.text('NF-e', MARGIN + w1a + 2, y + 4, { width: w1b - 4, align: 'center' });
 
-      // Coluna NF-e (centro)
-      doc.font(FONT_BOLD).fontSize(8);
-      doc.text('NF-e', MARGIN + recebaW + 2, y + 4, { width: 76, align: 'center' });
-      doc.moveTo(MARGIN + recebaW + 80, y).lineTo(MARGIN + recebaW + 80, y + h1).stroke(COLOR_BORDER);
-
-      // Coluna NÚMERO + SÉRIE (direita)
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('NÚMERO', MARGIN + recebaW + 82, y + 2, { width: 90, align: 'left' });
-      doc.font(FONT_BOLD).fontSize(10);
-      doc.text(String(data.nNF || '').padStart(6, '0'), MARGIN + recebaW + 82, y + 9, { width: 90, align: 'left' });
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('SÉRIE', MARGIN + recebaW + 82, y + 20, { width: 90, align: 'left' });
-      doc.font(FONT_BOLD).fontSize(8);
-      doc.text(String(data.serie || ''), MARGIN + recebaW + 145, y + 20, { width: 30, align: 'right' });
+      // NÚMERO + SÉRIE
+      doc.font(FONT_REG).fontSize(5);
+      doc.text('NÚMERO', MARGIN + w1a + w1b + 2, y + 3, { width: 60, height: 6 });
+      doc.font(FONT_BOLD).fontSize(11);
+      doc.text(String(data.nNF || '').padStart(6, '0'), MARGIN + w1a + w1b + 2, y + 9, { width: 60, align: 'left' });
+      doc.font(FONT_REG).fontSize(5);
+      doc.text('SÉRIE', MARGIN + w1a + w1b + 75, y + 3, { width: 30, height: 6 });
+      doc.font(FONT_BOLD).fontSize(11);
+      doc.text(String(data.serie || ''), MARGIN + w1a + w1b + 75, y + 9, { width: 30, align: 'right' });
 
       y += h1;
 
       // ============================================================
-      // BLOCO 2: LOGO + DANFE + CHAVE ACESSO
+      // BLOCO 2: LOGO + DANFE + CHAVE ACESSO (110 pts)
       // ============================================================
-      const h2 = 92;
+      const h2 = 110;
+      doc.rect(MARGIN, y, w, h2).stroke(BORDER);
       // 3 colunas: emitente (esq) | DANFE (centro) | chave (dir)
-      const col2A = 200; // emitente
-      const col2B = 100; // DANFE
-      const col2C = w - col2A - col2B; // chave
-
-      doc.rect(MARGIN, y, w, h2).stroke(COLOR_BORDER);
+      const col2A = 220;
+      const col2B = 90;
+      const col2C = w - col2A - col2B;
+      doc.moveTo(MARGIN + col2A, y).lineTo(MARGIN + col2A, y + h2).stroke(BORDER);
+      doc.moveTo(MARGIN + col2A + col2B, y).lineTo(MARGIN + col2A + col2B, y + h2).stroke(BORDER);
 
       // === Coluna esquerda: LOGO + dados emitente ===
-      // Logo box
-      const logoBoxH = 50;
-      const logoBoxW = col2A - 4;
+      // Logo: tamanho menor (máx 80x30 pts)
+      const logoBoxH = 30;
+      const logoBoxW = 120;
       if (logoData && logoData.buffer) {
         try {
-          doc.image(logoData.buffer, MARGIN + 2, y + 2, {
+          doc.image(logoData.buffer, MARGIN + 4, y + 2, {
             fit: [logoBoxW, logoBoxH],
-            align: 'center',
-            valign: 'center',
+            align: 'left',
+            valign: 'top',
           });
-        } catch (e) {
-          // fallback
-        }
-      } else {
-        doc.font(FONT_BOLD).fontSize(7);
-        doc.text(data.emit.nome.toUpperCase(), MARGIN + 4, y + 6, { width: logoBoxW - 4, height: 30 });
+        } catch (e) { /* fallback abaixo */ }
       }
-
       // Nome empresa abaixo do logo
       doc.font(FONT_BOLD).fontSize(7);
-      doc.text(data.emit.nome.toUpperCase(), MARGIN + 2, y + 52, { width: col2A - 4, height: 10 });
+      doc.text((data.emit.nome || '').toUpperCase(),
+        MARGIN + 2, y + 36, { width: col2A - 4, height: 12 });
 
-      // Endereço emitente
-      const end: string[] = [];
-      if (data.emit.endereco) end.push(`${data.emit.endereco}${data.emit.numero ? ', ' + data.emit.numero : ''}`);
-      if (data.emit.complemento) end.push(data.emit.complemento);
-      if (data.emit.bairro) end.push(data.emit.bairro);
-      const endStr = end.join(' - ');
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text(endStr, MARGIN + 2, y + 62, { width: col2A - 4, height: 7 });
+      // Endereço
+      const endParts: string[] = [];
+      if (data.emit.endereco) {
+        const n = data.emit.numero ? `, ${data.emit.numero}` : '';
+        const c = data.emit.complemento ? ` - ${data.emit.complemento}` : '';
+        endParts.push(`${data.emit.endereco}${n}${c}`);
+      }
+      if (data.emit.bairro) endParts.push(data.emit.bairro);
+      doc.font(FONT_REG).fontSize(6);
+      doc.text(endParts.join(' - '), MARGIN + 2, y + 50, { width: col2A - 4, height: 8 });
 
-      // Cidade/UF
-      const cidadeUf: string[] = [];
-      if (data.emit.cidade) cidadeUf.push(`${data.emit.cidade} - ${data.emit.uf || ''}`);
-      doc.text(cidadeUf.join(' - '), MARGIN + 2, y + 70, { width: col2A - 4, height: 7 });
+      // Cidade/UF/CEP
+      const cidadeUfCep: string[] = [];
+      if (data.emit.cidade) cidadeUfCep.push(`${data.emit.cidade} - ${data.emit.uf || ''}`);
+      if (data.emit.cep) cidadeUfCep.push(`CEP ${formatCep(data.emit.cep)}`);
+      doc.text(cidadeUfCep.join('  '), MARGIN + 2, y + 60, { width: col2A - 4, height: 8 });
 
-      // CNPJ
-      doc.font(FONT_REG).fontSize(5.5);
-      let cnpjEmit = data.emit.cnpj ? formatCnpj(data.emit.cnpj) : '';
-      doc.text(`C.N.P.J./C.P.F. ${cnpjEmit}`, MARGIN + 2, y + 78, { width: col2A - 4, height: 7 });
+      // CNPJ/IE/IM
+      const docs: string[] = [];
+      if (data.emit.cnpj) docs.push(`CNPJ: ${formatCnpj(data.emit.cnpj)}`);
+      if (data.emit.ie) docs.push(`IE: ${data.emit.ie}`);
+      if (data.emit.im) docs.push(`IM: ${data.emit.im}`);
+      doc.font(FONT_REG).fontSize(6);
+      doc.text(docs.join('  '), MARGIN + 2, y + 72, { width: col2A - 4, height: 8 });
 
-      // FONE + CEP
-      const foneCep: string[] = [];
-      if (data.emit.fone) foneCep.push(`FONE ${formatFone(data.emit.fone)}`);
-      if (data.emit.cep) foneCep.push(`CEP ${formatCep(data.emit.cep)}`);
-      doc.text(foneCep.join('         '), MARGIN + 2, y + 86, { width: col2A - 4, height: 5 });
+      // Fone
+      if (data.emit.fone) {
+        doc.text(`FONE: ${formatFone(data.emit.fone)}`, MARGIN + 2, y + 84, { width: col2A - 4, height: 8 });
+      }
 
-      // Separador vertical
-      doc.moveTo(MARGIN + col2A, y).lineTo(MARGIN + col2A, y + h2).stroke(COLOR_BORDER);
-
-      // === Coluna centro: DANFE + entrada/saída ===
+      // === Coluna centro: DANFE + 0/1 + Nº + SÉRIE + FOLHA ===
       const cx = MARGIN + col2A + 2;
-      doc.font(FONT_BOLD).fontSize(12);
-      doc.text('DANFE', cx, y + 6, { width: col2B - 4, align: 'center' });
-      doc.font(FONT_BOLD).fontSize(5.5);
-      doc.text('DOCUMENTO AUXILIAR DA NOTA', cx, y + 20, { width: col2B - 4, align: 'center' });
-      doc.text('FISCAL ELETRÔNICA', cx, y + 25, { width: col2B - 4, align: 'center' });
+      doc.font(FONT_BOLD).fontSize(14);
+      doc.text('DANFE', cx, y + 4, { width: col2B - 4, align: 'center' });
+      doc.font(FONT_BOLD).fontSize(6);
+      doc.text('DOCUMENTO AUXILIAR DA', cx, y + 22, { width: col2B - 4, align: 'center' });
+      doc.text('NOTA FISCAL ELETRÔNICA', cx, y + 28, { width: col2B - 4, align: 'center' });
 
-      // 0-ENTRADA / 1-SAÍDA (com marcação)
+      // 0-ENTRADA / 1-SAÍDA com X
       const tpNF = String(data.tpNF || '1');
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('0 - ENTRADA', cx, y + 36, { width: col2B - 4, align: 'left' });
-      doc.text('1 - SAÍDA', cx, y + 44, { width: col2B - 4, align: 'left' });
-      // Marca (X) na opção selecionada
+      doc.font(FONT_REG).fontSize(6);
+      doc.text('0-ENTRADA', cx, y + 40, { width: col2B - 4, height: 6 });
+      doc.text('1-SAÍDA', cx, y + 48, { width: col2B - 4, height: 6 });
+      // Marca X
       doc.font(FONT_BOLD).fontSize(10);
-      const tpX = tpNF === '0' ? cx + 0 : cx + 0;
-      const tpY = tpNF === '0' ? y + 36 : y + 44;
-      doc.text('X', tpX, tpY, { width: 8, align: 'left' });
+      const tpX = tpNF === '0' ? cx : cx;
+      const tpY = tpNF === '0' ? y + 40 : y + 48;
+      doc.text('X', tpX, tpY, { width: 10, align: 'left' });
 
-      doc.moveTo(MARGIN + col2A + col2B, y).lineTo(MARGIN + col2A + col2B, y + h2).stroke(COLOR_BORDER);
-
-      // === Coluna direita: CHAVE ACESSO + barcode + nº + série + folha ===
+      // === Coluna direita: CHAVE ACESSO + barcode + consulta ===
       const dx = MARGIN + col2A + col2B + 2;
       const dw = col2C - 4;
-      doc.font(FONT_REG).fontSize(5.5);
+      doc.font(FONT_REG).fontSize(5);
       doc.text('CHAVE DE ACESSO', dx, y + 2, { width: dw, align: 'left' });
 
-      // Chave formatada em grupos de 4
-      const chaveFmt = String(data.chave || '').match(/.{1,4}/g)?.join(' ') || data.chave || '';
+      // Chave formatada em 4 grupos de 11 dígitos
+      const chaveFmt = String(data.chave || '').match(/.{1,4}/g)?.join(' ') || '';
       doc.font(FONT_BOLD).fontSize(7);
-      doc.text(chaveFmt, dx, y + 9, { width: dw, height: 10, align: 'center' });
+      doc.text(chaveFmt, dx, y + 9, { width: dw, height: 8, align: 'center' });
 
-      // Barcode (Code128C)
+      // Barcode
       try {
         const png = bwipjs.toBuffer({
           bcid: 'code128',
           text: String(data.chave || ''),
           scale: 1.5,
-          height: 22,
+          height: 28,
           includetext: false,
         });
-        doc.image(png, dx + (dw - 180) / 2, y + 20, { width: 180, height: 22 });
+        const barW = Math.min(220, dw);
+        doc.image(png, dx + (dw - barW) / 2, y + 20, { width: barW, height: 28 });
       } catch (e) {
         console.warn('[DANFE-PDF] Falha barcode:', (e as Error).message);
       }
 
-      // Nº + Série + Folha
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('Nº', dx + 5, y + 44, { width: 25 });
-      doc.font(FONT_BOLD).fontSize(10);
-      doc.text(String(data.nNF || '').padStart(6, '0'), dx + 30, y + 42, { width: 70, align: 'right' });
-
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('SÉRIE', dx + 5, y + 58, { width: 25 });
-      doc.font(FONT_BOLD).fontSize(10);
-      doc.text(String(data.serie || ''), dx + 30, y + 56, { width: 70, align: 'right' });
-
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('FOLHA', dx + 5, y + 72, { width: 25 });
-      doc.font(FONT_BOLD).fontSize(8);
-      const folhaStr = `${data.folhaAtual || 1}/${data.folhaTotal || 1}`;
-      doc.text(folhaStr, dx + 30, y + 72, { width: 70, align: 'right' });
-
       // Mensagem consulta autenticidade
       doc.font(FONT_REG).fontSize(4.5);
       doc.text('Consulta de autenticidade no portal nacional da NF-e',
-        dx, y + 82, { width: dw, height: 6, align: 'left' });
+        dx, y + 52, { width: dw, height: 5, align: 'left' });
       doc.text('www.nfe.fazenda.gov.br/portal ou no site da Sefaz Autorizada',
-        dx, y + 87, { width: dw, height: 5, align: 'left' });
+        dx, y + 57, { width: dw, height: 5, align: 'left' });
+
+      // Nº + SÉRIE + FOLHA
+      doc.font(FONT_REG).fontSize(5);
+      doc.text('Nº', dx, y + 68, { width: 15 });
+      doc.font(FONT_BOLD).fontSize(11);
+      doc.text(String(data.nNF || '').padStart(6, '0'), dx + 18, y + 65, { width: 70, align: 'right' });
+
+      doc.font(FONT_REG).fontSize(5);
+      doc.text('SÉRIE', dx + 90, y + 68, { width: 25 });
+      doc.font(FONT_BOLD).fontSize(11);
+      doc.text(String(data.serie || ''), dx + 115, y + 65, { width: 35, align: 'right' });
+
+      doc.font(FONT_REG).fontSize(5);
+      doc.text('FOLHA', dx, y + 90, { width: 25 });
+      doc.font(FONT_BOLD).fontSize(8);
+      doc.text(`${data.folhaAtual || 1}/${data.folhaTotal || 1}`, dx + 28, y + 90, { width: 70, align: 'right' });
 
       y += h2;
 
       // ============================================================
-      // BLOCO 3: NATUREZA OPER + PROTOCOLO
+      // BLOCO 3: NATUREZA OP + PROTOCOLO (20 pts)
       // ============================================================
-      const h3 = 22;
-      doc.rect(MARGIN, y, w, h3).stroke(COLOR_BORDER);
-      const natW = w * 0.55;
-      doc.moveTo(MARGIN + natW, y).lineTo(MARGIN + natW, y + h3).stroke(COLOR_BORDER);
+      const h3 = 20;
+      doc.rect(MARGIN, y, w, h3).stroke(BORDER);
+      const w3a = w * 0.55;
+      doc.moveTo(MARGIN + w3a, y).lineTo(MARGIN + w3a, y + h3).stroke(BORDER);
 
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('NATUREZA DA OPERAÇÃO', MARGIN + 2, y + 2, { width: natW - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(data.natOp || '', MARGIN + 2, y + 10, { width: natW - 4, height: 10 });
-
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('NÚMERO PROTOCOLO', MARGIN + natW + 2, y + 2, { width: w - natW - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(8);
-      const protoStr = `${data.protocolo || ''} ${data.dhAutorizacao ? formatDateTime(data.dhAutorizacao) : ''}`;
-      doc.text(protoStr, MARGIN + natW + 2, y + 10, { width: w - natW - 4, height: 10 });
+      drawCell(MARGIN, y, w3a, h3, 'NATUREZA DA OPERAÇÃO', data.natOp || '', { valSize: 7, multiline: true });
+      drawCell(MARGIN + w3a, y, w - w3a, h3,
+        'NÚMERO PROTOCOLO',
+        `${data.protocolo || ''} ${data.dhAutorizacao ? formatDateTime(data.dhAutorizacao) : ''}`.trim(),
+        { valSize: 8 });
 
       y += h3;
 
       // ============================================================
-      // BLOCO 4: IE + IEST + CNPJ/CPF EMITENTE
+      // BLOCO 4: IE + IEST + CNPJ (14 pts)
       // ============================================================
-      const h4 = 16;
-      doc.rect(MARGIN, y, w, h4).stroke(COLOR_BORDER);
-      const c4a = w / 3;
-      doc.moveTo(MARGIN + c4a, y).lineTo(MARGIN + c4a, y + h4).stroke(COLOR_BORDER);
-      doc.moveTo(MARGIN + 2 * c4a, y).lineTo(MARGIN + 2 * c4a, y + h4).stroke(COLOR_BORDER);
+      const h4 = 14;
+      doc.rect(MARGIN, y, w, h4).stroke(BORDER);
+      const c4 = w / 3;
+      vDividers(MARGIN, y, y + h4, [c4, 2 * c4]);
 
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('INSCRIÇÃO ESTADUAL', MARGIN + 2, y + 2, { width: c4a - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(data.emit.ie || '', MARGIN + 2, y + 9, { width: c4a - 4, height: 7 });
-
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('INSC.ESTADUAL DO SUBST.TRIBUT.', MARGIN + c4a + 2, y + 2, { width: c4a - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(data.emit.iest || '', MARGIN + c4a + 2, y + 9, { width: c4a - 4, height: 7 });
-
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('CNPJ/CPF', MARGIN + 2 * c4a + 2, y + 2, { width: c4a - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      const docEmit = data.emit.cnpj ? formatCnpj(data.emit.cnpj) : data.emit.cpf ? formatCpf(data.emit.cpf) : '';
-      doc.text(docEmit, MARGIN + 2 * c4a + 2, y + 9, { width: c4a - 4, height: 7 });
+      drawCell(MARGIN, y, c4, h4, 'INSCRIÇÃO ESTADUAL', data.emit.ie || '');
+      drawCell(MARGIN + c4, y, c4, h4, 'INSC.ESTADUAL DO SUBST.TRIBUT.', data.emit.iest || '');
+      drawCell(MARGIN + 2 * c4, y, c4, h4, 'CNPJ/CPF',
+        data.emit.cnpj ? formatCnpj(data.emit.cnpj) : data.emit.cpf ? formatCpf(data.emit.cpf) : '');
 
       y += h4;
 
       // ============================================================
-      // BLOCO 5: DESTINATÁRIO / REMETENTE (3 linhas)
+      // BLOCO 5: DESTINATÁRIO / REMETENTE (52 pts)
       // ============================================================
-      const h5 = 50;
-      doc.rect(MARGIN, y, w, h5).stroke(COLOR_BORDER);
-
-      // Título
+      const h5 = 52;
+      doc.rect(MARGIN, y, w, h5).stroke(BORDER);
       doc.font(FONT_BOLD).fontSize(6);
       doc.text('DESTINATÁRIO / REMETENTE', MARGIN + 2, y + 1, { width: w - 4, height: 7 });
 
-      // Linha 1: NOME | CNPJ/CPF | DATA EMISSÃO
-      const y5l1 = y + 12;
-      doc.moveTo(MARGIN, y5l1).lineTo(MARGIN + w, y5l1).stroke(COLOR_BORDER);
-      const w5a = w * 0.50;
-      const w5b = w * 0.27;
-      const w5c = w - w5a - w5b;
-      doc.moveTo(MARGIN + w5a, y5l1).lineTo(MARGIN + w5a, y + h5).stroke(COLOR_BORDER);
-      doc.moveTo(MARGIN + w5a + w5b, y5l1).lineTo(MARGIN + w5a + w5b, y + h5).stroke(COLOR_BORDER);
+      // Linha 1: NOME (50%) | CNPJ/CPF (27%) | DATA EMISSÃO (resto)
+      const y5l1 = y + 9;
+      hDivider(MARGIN, y5l1, w);
+      const w5a = w * 0.50, w5b = w * 0.27, w5c = w - w5a - w5b;
+      vDividers(MARGIN, y5l1, y + h5, [w5a, w5a + w5b]);
 
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('NOME / RAZÃO SOCIAL', MARGIN + 2, y5l1 + 1, { width: w5a - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(data.dest?.nome || '', MARGIN + 2, y5l1 + 8, { width: w5a - 4, height: 8 });
+      drawCell(MARGIN, y5l1, w5a, h5 - 9, 'NOME / RAZÃO SOCIAL', data.dest?.nome || '', { valSize: 7, multiline: true });
+      drawCell(MARGIN + w5a, y5l1, w5b, h5 - 9, 'CNPJ / CPF',
+        data.dest?.cnpj ? formatCnpj(data.dest.cnpj) : data.dest?.cpf ? formatCpf(data.dest.cpf) : '');
+      drawCell(MARGIN + w5a + w5b, y5l1, w5c, h5 - 9, 'DATA EMISSÃO', formatDate(data.dhEmi));
 
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('CNPJ / CPF', MARGIN + w5a + 2, y5l1 + 1, { width: w5b - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      const docDest = data.dest?.cnpj ? formatCnpj(data.dest.cnpj) : data.dest?.cpf ? formatCpf(data.dest.cpf) : '';
-      doc.text(docDest, MARGIN + w5a + 2, y5l1 + 8, { width: w5b - 4, height: 8 });
-
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('DATA EMISSÃO', MARGIN + w5a + w5b + 2, y5l1 + 1, { width: w5c - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(formatDate(data.dhEmi), MARGIN + w5a + w5b + 2, y5l1 + 8, { width: w5c - 4, height: 8 });
-
-      // Linha 2: ENDEREÇO | BAIRRO | CEP | DATA ENT/SAI
+      // Linha 2: ENDEREÇO (40%) | BAIRRO (25%) | CEP (15%) | DATA ENT/SAI (resto)
       const y5l2 = y5l1 + 18;
-      doc.moveTo(MARGIN, y5l2).lineTo(MARGIN + w, y5l2).stroke(COLOR_BORDER);
-      const w5d = w * 0.40;
-      const w5e = w * 0.25;
-      const w5f = w * 0.15;
-      const w5g = w - w5d - w5e - w5f;
-      doc.moveTo(MARGIN + w5d, y5l2).lineTo(MARGIN + w5d, y + h5).stroke(COLOR_BORDER);
-      doc.moveTo(MARGIN + w5d + w5e, y5l2).lineTo(MARGIN + w5d + w5e, y + h5).stroke(COLOR_BORDER);
-      doc.moveTo(MARGIN + w5d + w5e + w5f, y5l2).lineTo(MARGIN + w5d + w5e + w5f, y + h5).stroke(COLOR_BORDER);
+      hDivider(MARGIN, y5l2, w);
+      const w5d = w * 0.40, w5e = w * 0.25, w5f = w * 0.15, w5g = w - w5d - w5e - w5f;
+      vDividers(MARGIN, y5l2, y + h5, [w5d, w5d + w5e, w5d + w5e + w5f]);
 
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('ENDEREÇO', MARGIN + 2, y5l2 + 1, { width: w5d - 4, height: 7 });
-      // Endereço dest
       const endDest: string[] = [];
       if (data.dest?.endereco) endDest.push(data.dest.endereco);
       if (data.dest?.numero) endDest.push(data.dest.numero);
       if (data.dest?.complemento) endDest.push(data.dest.complemento);
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(endDest.join(', '), MARGIN + 2, y5l2 + 8, { width: w5d - 4, height: 8 });
+      drawCell(MARGIN, y5l2, w5d, 17, 'ENDEREÇO', endDest.join(', '), { valSize: 6, multiline: true });
+      drawCell(MARGIN + w5d, y5l2, w5e, 17, 'BAIRRO / DISTRITO', data.dest?.bairro || '');
+      drawCell(MARGIN + w5d + w5e, y5l2, w5f, 17, 'CEP', formatCep(data.dest?.cep));
+      drawCell(MARGIN + w5d + w5e + w5f, y5l2, w5g, 17, 'DATA DE ENT/SAI', formatDate(data.dhEmi));
 
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('BAIRRO / DISTRITO', MARGIN + w5d + 2, y5l2 + 1, { width: w5e - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(data.dest?.bairro || '', MARGIN + w5d + 2, y5l2 + 8, { width: w5e - 4, height: 8 });
+      // Linha 3: MUNICÍPIO (35%) | FONE (25%) | UF (5%) | IE (20%) | HORA SAÍDA (resto)
+      const y5l3 = y5l2 + 17;
+      hDivider(MARGIN, y5l3, w);
+      const w5h = w * 0.35, w5i = w * 0.25, w5j = w * 0.05, w5k = w * 0.20, w5l = w - w5h - w5i - w5j - w5k;
+      vDividers(MARGIN, y5l3, y + h5, [w5h, w5h + w5i, w5h + w5i + w5j, w5h + w5i + w5j + w5k]);
 
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('CEP', MARGIN + w5d + w5e + 2, y5l2 + 1, { width: w5f - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(formatCep(data.dest?.cep), MARGIN + w5d + w5e + 2, y5l2 + 8, { width: w5f - 4, height: 8 });
-
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('DATA DE ENT / SAI', MARGIN + w5d + w5e + w5f + 2, y5l2 + 1, { width: w5g - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(formatDate(data.dhEmi), MARGIN + w5d + w5e + w5f + 2, y5l2 + 8, { width: w5g - 4, height: 8 });
-
-      // Linha 3: MUNICÍPIO | FONE/FAX | UF | IE DEST | HORA SAÍDA
-      const y5l3 = y5l2 + 18;
-      doc.moveTo(MARGIN, y5l3).lineTo(MARGIN + w, y5l3).stroke(COLOR_BORDER);
-      const w5h = w * 0.35;
-      const w5i = w * 0.25;
-      const w5j = w * 0.05;
-      const w5k = w * 0.20;
-      const w5l = w - w5h - w5i - w5j - w5k;
-      doc.moveTo(MARGIN + w5h, y5l3).lineTo(MARGIN + w5h, y + h5).stroke(COLOR_BORDER);
-      doc.moveTo(MARGIN + w5h + w5i, y5l3).lineTo(MARGIN + w5h + w5i, y + h5).stroke(COLOR_BORDER);
-      doc.moveTo(MARGIN + w5h + w5i + w5j, y5l3).lineTo(MARGIN + w5h + w5i + w5j, y + h5).stroke(COLOR_BORDER);
-      doc.moveTo(MARGIN + w5h + w5i + w5j + w5k, y5l3).lineTo(MARGIN + w5h + w5i + w5j + w5k, y + h5).stroke(COLOR_BORDER);
-
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('MUNICÍPIO', MARGIN + 2, y5l3 + 1, { width: w5h - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(data.dest?.cidade || '', MARGIN + 2, y5l3 + 8, { width: w5h - 4, height: 8 });
-
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('FONE / FAX', MARGIN + w5h + 2, y5l3 + 1, { width: w5i - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(formatFone(data.dest?.fone), MARGIN + w5h + 2, y5l3 + 8, { width: w5i - 4, height: 8 });
-
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('UF', MARGIN + w5h + w5i + 2, y5l3 + 1, { width: w5j - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(8);
-      doc.text(data.dest?.uf || '', MARGIN + w5h + w5i + 2, y5l3 + 8, { width: w5j - 4, height: 8, align: 'center' });
-
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('INSCRIÇÃO ESTADUAL', MARGIN + w5h + w5i + w5j + 2, y5l3 + 1, { width: w5k - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(data.dest?.ie || '', MARGIN + w5h + w5i + w5j + 2, y5l3 + 8, { width: w5k - 4, height: 8 });
-
-      doc.font(FONT_REG).fontSize(5.5);
-      doc.text('HORA DE SAÍDA', MARGIN + w5h + w5i + w5j + w5k + 2, y5l3 + 1, { width: w5l - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(formatTime(data.dhEmi), MARGIN + w5h + w5i + w5j + w5k + 2, y5l3 + 8, { width: w5l - 4, height: 8 });
+      drawCell(MARGIN, y5l3, w5h, 17, 'MUNICÍPIO', data.dest?.cidade || '');
+      drawCell(MARGIN + w5h, y5l3, w5i, 17, 'FONE / FAX', formatFone(data.dest?.fone));
+      drawCell(MARGIN + w5h + w5i, y5l3, w5j, 17, 'UF', data.dest?.uf || '', { align: 'center', valSize: 8 });
+      drawCell(MARGIN + w5h + w5i + w5j, y5l3, w5k, 17, 'INSCRIÇÃO ESTADUAL', data.dest?.ie || '');
+      drawCell(MARGIN + w5h + w5i + w5j + w5k, y5l3, w5l, 17, 'HORA DE SAÍDA', formatTime(data.dhEmi));
 
       y += h5;
 
       // ============================================================
-      // BLOCO 6: FATURA / DUPLICATAS
+      // BLOCO 6: FATURA / DUPLICATAS (28 pts)
       // ============================================================
       const dups = data.duplicatas || [];
-      const h6 = Math.max(22, dups.length > 0 ? 14 + Math.ceil(dups.length / 3) * 12 : 22);
-      doc.rect(MARGIN, y, w, h6).stroke(COLOR_BORDER);
+      const h6 = 28;
+      doc.rect(MARGIN, y, w, h6).stroke(BORDER);
       doc.font(FONT_BOLD).fontSize(6);
       doc.text('FATURA / DUPLICATA', MARGIN + 2, y + 1, { width: w - 4, height: 7 });
 
-      // Renderiza duplicatas em 3 colunas
-      const startY6 = y + 10;
+      // Renderiza duplicatas em grid 3 colunas x N linhas
       const cols6 = 3;
       const col6W = w / cols6;
-      dups.forEach((dup, i) => {
+      const startY6 = y + 9;
+      dups.slice(0, 6).forEach((dup, i) => {
         const col = i % cols6;
         const row = Math.floor(i / cols6);
         const dx = MARGIN + col * col6W;
-        const dy = startY6 + row * 12;
+        const dy = startY6 + row * 9;
         doc.font(FONT_BOLD).fontSize(6);
-        doc.text(dup.numero, dx + 2, dy, { width: 25 });
+        doc.text(dup.numero, dx + 1, dy, { width: 30 });
         doc.font(FONT_REG).fontSize(6);
-        doc.text(dup.vencimento, dx + 25, dy, { width: 50 });
+        doc.text(dup.vencimento, dx + 30, dy, { width: 60 });
         doc.font(FONT_BOLD).fontSize(6);
-        doc.text(formatMoney(dup.valor), dx + 75, dy, { width: col6W - 80, align: 'right' });
+        doc.text(formatMoney(dup.valor), dx + col6W - 51, dy, { width: 50, align: 'right' });
       });
 
       y += h6;
 
       // ============================================================
-      // BLOCO 7: CÁLCULO DO IMPOSTO (2 linhas x 6 colunas)
+      // BLOCO 7: CÁLCULO DO IMPOSTO (32 pts, 2 linhas x 6 col)
       // ============================================================
-      const h7 = 36;
-      doc.rect(MARGIN, y, w, h7).stroke(COLOR_BORDER);
+      const h7 = 32;
+      doc.rect(MARGIN, y, w, h7).stroke(BORDER);
       doc.font(FONT_BOLD).fontSize(6);
       doc.text('CÁLCULO DO IMPOSTO', MARGIN + 2, y + 1, { width: w - 4, height: 7 });
 
-      const cols7 = 6;
-      const col7W = w / cols7;
+      const col7W = w / 6;
+      const y7l1 = y + 8;
+      hDivider(MARGIN, y7l1, w);
+      const y7l2 = y7l1 + 12;
+      hDivider(MARGIN, y7l2, w);
+      vDividers(MARGIN, y7l1, y + h7, [col7W, 2*col7W, 3*col7W, 4*col7W, 5*col7W]);
 
-      // Linha 1
-      const y7l1 = y + 9;
-      doc.moveTo(MARGIN, y7l1).lineTo(MARGIN + w, y7l1).stroke(COLOR_BORDER);
-
-      const labels7l1 = [
+      const row1 = [
         { label: 'BASE DE CÁLCULO ICMS', val: formatMoney(data.vBC) },
         { label: 'VALOR DO ICMS', val: formatMoney(data.vICMS) },
         { label: 'BASE DE CÁLCULO ICMS SUBST.', val: formatMoney(data.vBCST) },
@@ -537,20 +480,11 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
         { label: 'VALOR TOTAL DOS TRIBUTOS', val: formatMoney(data.vTotTrib) },
         { label: 'VALOR TOTAL DOS PRODUTOS', val: formatMoney(data.vProd) },
       ];
-      labels7l1.forEach((c, i) => {
-        const cx = MARGIN + i * col7W;
-        if (i > 0) doc.moveTo(cx, y7l1).lineTo(cx, y + h7).stroke(COLOR_BORDER);
-        doc.font(FONT_REG).fontSize(5);
-        doc.text(c.label, cx + 2, y7l1 + 1, { width: col7W - 4, height: 8 });
-        doc.font(FONT_BOLD).fontSize(7);
-        doc.text(c.val, cx + 2, y7l1 + 10, { width: col7W - 4, height: 9, align: 'right' });
+      row1.forEach((c, i) => {
+        drawCell(MARGIN + i * col7W, y7l1, col7W, 11, c.label, c.val, { valSize: 7, align: 'right' });
       });
 
-      // Linha 2
-      const y7l2 = y7l1 + 18;
-      doc.moveTo(MARGIN, y7l2).lineTo(MARGIN + w, y7l2).stroke(COLOR_BORDER);
-
-      const labels7l2 = [
+      const row2 = [
         { label: 'VALOR DO FRETE', val: formatMoney(data.vFrete) },
         { label: 'VALOR DO SEGURO', val: formatMoney(data.vSeg) },
         { label: 'DESCONTO', val: formatMoney(data.vDesc) },
@@ -558,271 +492,184 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
         { label: 'VALOR DO IPI', val: formatMoney(data.vIPI) },
         { label: 'VALOR TOTAL DA NOTA', val: formatMoney(data.vNF) },
       ];
-      labels7l2.forEach((c, i) => {
-        const cx = MARGIN + i * col7W;
-        if (i > 0) doc.moveTo(cx, y7l2).lineTo(cx, y + h7).stroke(COLOR_BORDER);
-        doc.font(FONT_REG).fontSize(5);
-        doc.text(c.label, cx + 2, y7l2 + 1, { width: col7W - 4, height: 8 });
-        doc.font(FONT_BOLD).fontSize(7);
-        doc.text(c.val, cx + 2, y7l2 + 9, { width: col7W - 4, height: 9, align: 'right' });
+      row2.forEach((c, i) => {
+        drawCell(MARGIN + i * col7W, y7l2, col7W, 12, c.label, c.val, { valSize: 7, align: 'right' });
       });
 
       y += h7;
 
       // ============================================================
-      // BLOCO 8: TRANSPORTADOR / VOLUMES (3 linhas)
+      // BLOCO 8: TRANSPORTADOR / VOLUMES (38 pts, 3 linhas)
       // ============================================================
-      const h8 = 42;
-      doc.rect(MARGIN, y, w, h8).stroke(COLOR_BORDER);
+      const h8 = 38;
+      doc.rect(MARGIN, y, w, h8).stroke(BORDER);
       doc.font(FONT_BOLD).fontSize(6);
       doc.text('TRANSPORTADOR / VOLUME', MARGIN + 2, y + 1, { width: w - 4, height: 7 });
 
-      // Linha 1: RAZÃO SOCIAL | FRETE POR CONTA | CÓD ANTT | PLACA | UF | CNPJ/CPF
-      const y8l1 = y + 9;
-      doc.moveTo(MARGIN, y8l1).lineTo(MARGIN + w, y8l1).stroke(COLOR_BORDER);
-      const w8a = w * 0.40;
-      const w8b = w * 0.20;
-      const w8c = w * 0.08;
-      const w8d = w * 0.10;
-      const w8e = w * 0.04;
+      const y8l1 = y + 8;
+      hDivider(MARGIN, y8l1, w);
+      const y8l2 = y8l1 + 10;
+      hDivider(MARGIN, y8l2, w);
+      const y8l3 = y8l2 + 10;
+      hDivider(MARGIN, y8l3, w);
+
+      // Linha 1: RAZÃO SOCIAL | FRETE POR CONTA | ANTT | PLACA | UF | CNPJ/CPF
+      const w8a = w * 0.32, w8b = w * 0.22, w8c = w * 0.10, w8d = w * 0.10, w8e = w * 0.04;
       const w8f = w - w8a - w8b - w8c - w8d - w8e;
-      [w8a, w8a + w8b, w8a + w8b + w8c, w8a + w8b + w8c + w8d, w8a + w8b + w8c + w8d + w8e].forEach((acc, i) => {
-        doc.moveTo(MARGIN + acc, y8l1).lineTo(MARGIN + acc, y + h8).stroke(COLOR_BORDER);
-      });
+      vDividers(MARGIN, y8l1, y8l2, [w8a, w8a+w8b, w8a+w8b+w8c, w8a+w8b+w8c+w8d, w8a+w8b+w8c+w8d+w8e]);
 
-      doc.font(FONT_REG).fontSize(5);
-      doc.text('RAZÃO SOCIAL', MARGIN + 2, y8l1 + 1, { width: w8a - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(data.transportadora?.nome || '', MARGIN + 2, y8l1 + 8, { width: w8a - 4, height: 8 });
-
-      doc.font(FONT_REG).fontSize(5);
-      doc.text('FRETE POR CONTA', MARGIN + w8a + 2, y8l1 + 1, { width: w8b - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(6);
       const freteDesc = {
         '0': '0-Por conta do Remetente (CIF)',
         '1': '1-Por conta do Destinatário (FOB)',
         '2': '2-Por conta de Terceiros',
         '9': '9-Sem Frete',
       }[data.transportadora?.fretePorConta || ''] || '';
-      doc.text(freteDesc, MARGIN + w8a + 2, y8l1 + 8, { width: w8b - 4, height: 8 });
 
-      doc.font(FONT_REG).fontSize(5);
-      doc.text('CÓDIGO ANTT', MARGIN + w8a + w8b + 2, y8l1 + 1, { width: w8c - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(data.transportadora?.antt || '', MARGIN + w8a + w8b + 2, y8l1 + 8, { width: w8c - 4, height: 8 });
-
-      doc.font(FONT_REG).fontSize(5);
-      doc.text('PLACA', MARGIN + w8a + w8b + w8c + 2, y8l1 + 1, { width: w8d - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(data.transportadora?.placa || '', MARGIN + w8a + w8b + w8c + 2, y8l1 + 8, { width: w8d - 4, height: 8 });
-
-      doc.font(FONT_REG).fontSize(5);
-      doc.text('UF', MARGIN + w8a + w8b + w8c + w8d + 2, y8l1 + 1, { width: w8e - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(data.transportadora?.ufVeiculo || '', MARGIN + w8a + w8b + w8c + w8d + 2, y8l1 + 8, { width: w8e - 4, height: 8 });
-
-      doc.font(FONT_REG).fontSize(5);
-      doc.text('CNPJ / CPF', MARGIN + w8a + w8b + w8c + w8d + w8e + 2, y8l1 + 1, { width: w8f - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      const tcnpj = data.transportadora?.cnpj;
-      doc.text(tcnpj ? formatCnpj(tcnpj) : '', MARGIN + w8a + w8b + w8c + w8d + w8e + 2, y8l1 + 8, { width: w8f - 4, height: 8 });
+      drawCell(MARGIN, y8l1, w8a, 9, 'RAZÃO SOCIAL', data.transportadora?.nome || '', { valSize: 6 });
+      drawCell(MARGIN + w8a, y8l1, w8b, 9, 'FRETE POR CONTA', freteDesc, { valSize: 5 });
+      drawCell(MARGIN + w8a + w8b, y8l1, w8c, 9, 'CÓD. ANTT', data.transportadora?.antt || '', { valSize: 6 });
+      drawCell(MARGIN + w8a + w8b + w8c, y8l1, w8d, 9, 'PLACA', data.transportadora?.placa || '', { valSize: 6 });
+      drawCell(MARGIN + w8a + w8b + w8c + w8d, y8l1, w8e, 9, 'UF', data.transportadora?.ufVeiculo || '', { align: 'center' });
+      drawCell(MARGIN + w8a + w8b + w8c + w8d + w8e, y8l1, w8f, 9, 'CNPJ / CPF',
+        data.transportadora?.cnpj ? formatCnpj(data.transportadora.cnpj) : '', { valSize: 6 });
 
       // Linha 2: ENDEREÇO | MUNICÍPIO | UF | IE
-      const y8l2 = y8l1 + 16;
-      doc.moveTo(MARGIN, y8l2).lineTo(MARGIN + w, y8l2).stroke(COLOR_BORDER);
-      const w8g = w * 0.50;
-      const w8h = w * 0.30;
-      const w8i = w * 0.06;
+      const w8g = w * 0.50, w8h = w * 0.35, w8i = w * 0.05;
       const w8j = w - w8g - w8h - w8i;
-      doc.moveTo(MARGIN + w8g, y8l2).lineTo(MARGIN + w8g, y + h8).stroke(COLOR_BORDER);
-      doc.moveTo(MARGIN + w8g + w8h, y8l2).lineTo(MARGIN + w8g + w8h, y + h8).stroke(COLOR_BORDER);
-      doc.moveTo(MARGIN + w8g + w8h + w8i, y8l2).lineTo(MARGIN + w8g + w8h + w8i, y + h8).stroke(COLOR_BORDER);
+      vDividers(MARGIN, y8l2, y8l3, [w8g, w8g+w8h, w8g+w8h+w8i]);
 
-      doc.font(FONT_REG).fontSize(5);
-      doc.text('ENDEREÇO', MARGIN + 2, y8l2 + 1, { width: w8g - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(data.transportadora?.endereco || '', MARGIN + 2, y8l2 + 8, { width: w8g - 4, height: 8 });
-
-      doc.font(FONT_REG).fontSize(5);
-      doc.text('MUNICÍPIO', MARGIN + w8g + 2, y8l2 + 1, { width: w8h - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(data.transportadora?.cidade || '', MARGIN + w8g + 2, y8l2 + 8, { width: w8h - 4, height: 8 });
-
-      doc.font(FONT_REG).fontSize(5);
-      doc.text('UF', MARGIN + w8g + w8h + 2, y8l2 + 1, { width: w8i - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(data.transportadora?.uf || '', MARGIN + w8g + w8h + 2, y8l2 + 8, { width: w8i - 4, height: 8 });
-
-      doc.font(FONT_REG).fontSize(5);
-      doc.text('INSCRIÇÃO ESTADUAL', MARGIN + w8g + w8h + w8i + 2, y8l2 + 1, { width: w8j - 4, height: 7 });
-      doc.font(FONT_BOLD).fontSize(7);
-      doc.text(data.transportadora?.ie || '', MARGIN + w8g + w8h + w8i + 2, y8l2 + 8, { width: w8j - 4, height: 8 });
+      drawCell(MARGIN, y8l2, w8g, 9, 'ENDEREÇO', data.transportadora?.endereco || '', { valSize: 6 });
+      drawCell(MARGIN + w8g, y8l2, w8h, 9, 'MUNICÍPIO', data.transportadora?.cidade || '', { valSize: 6 });
+      drawCell(MARGIN + w8g + w8h, y8l2, w8i, 9, 'UF', data.transportadora?.uf || '', { align: 'center' });
+      drawCell(MARGIN + w8g + w8h + w8i, y8l2, w8j, 9, 'INSCRIÇÃO ESTADUAL', data.transportadora?.ie || '', { valSize: 6 });
 
       // Linha 3: QUANTIDADE | ESPÉCIE | MARCA | NÚMERO | PESO BRUTO | PESO LÍQUIDO
-      const y8l3 = y8l2 + 16;
-      doc.moveTo(MARGIN, y8l3).lineTo(MARGIN + w, y8l3).stroke(COLOR_BORDER);
-      const w8k = w * 0.10;
-      const w8l = w * 0.15;
-      const w8m = w * 0.20;
-      const w8n = w * 0.15;
-      const w8o = w * 0.20;
+      const w8k = w * 0.10, w8l = w * 0.15, w8m = w * 0.20, w8n = w * 0.15, w8o = w * 0.20;
       const w8p = w - w8k - w8l - w8m - w8n - w8o;
-      const acc8 = [w8k, w8k + w8l, w8k + w8l + w8m, w8k + w8l + w8m + w8n, w8k + w8l + w8m + w8n + w8o];
-      acc8.forEach((acc) => {
-        doc.moveTo(MARGIN + acc, y8l3).lineTo(MARGIN + acc, y + h8).stroke(COLOR_BORDER);
-      });
+      vDividers(MARGIN, y8l3, y + h8, [w8k, w8k+w8l, w8k+w8l+w8m, w8k+w8l+w8m+w8n, w8k+w8l+w8m+w8n+w8o]);
 
-      const labels8l3 = [
-        { label: 'QUANTIDADE', val: String(data.transportadora?.quantidade || '') },
-        { label: 'ESPÉCIE', val: data.transportadora?.especie || '' },
-        { label: 'MARCA', val: data.transportadora?.marca || '' },
-        { label: 'NÚMERO', val: data.transportadora?.numero || '' },
-        { label: 'PESO BRUTO', val: formatNum3(data.transportadora?.pesoBruto) },
-        { label: 'PESO LÍQUIDO', val: formatNum3(data.transportadora?.pesoLiquido) },
-      ];
-      labels8l3.forEach((c, i) => {
-        const widths = [w8k, w8l, w8m, w8n, w8o, w8p];
-        let cx = MARGIN;
-        for (let j = 0; j < i; j++) cx += widths[j];
-        doc.font(FONT_REG).fontSize(5);
-        doc.text(c.label, cx + 2, y8l3 + 1, { width: widths[i] - 4, height: 7 });
-        doc.font(FONT_BOLD).fontSize(7);
-        doc.text(c.val, cx + 2, y8l3 + 8, { width: widths[i] - 4, height: 8 });
-      });
+      drawCell(MARGIN, y8l3, w8k, 11, 'QUANTIDADE', String(data.transportadora?.quantidade || ''), { valSize: 6 });
+      drawCell(MARGIN + w8k, y8l3, w8l, 11, 'ESPÉCIE', data.transportadora?.especie || '', { valSize: 6 });
+      drawCell(MARGIN + w8k + w8l, y8l3, w8m, 11, 'MARCA', data.transportadora?.marca || '', { valSize: 6 });
+      drawCell(MARGIN + w8k + w8l + w8m, y8l3, w8n, 11, 'NÚMERO', data.transportadora?.numero || '', { valSize: 6 });
+      drawCell(MARGIN + w8k + w8l + w8m + w8n, y8l3, w8o, 11, 'PESO BRUTO', formatNum3(data.transportadora?.pesoBruto), { valSize: 6, align: 'right' });
+      drawCell(MARGIN + w8k + w8l + w8m + w8n + w8o, y8l3, w8p, 11, 'PESO LÍQUIDO', formatNum3(data.transportadora?.pesoLiquido), { valSize: 6, align: 'right' });
 
       y += h8;
 
       // ============================================================
-      // BLOCO 9: CÁLCULO DO ISSQN
+      // BLOCO 9: ISSQN (14 pts)
       // ============================================================
-      const h9 = 16;
-      doc.rect(MARGIN, y, w, h9).stroke(COLOR_BORDER);
+      const h9 = 14;
+      doc.rect(MARGIN, y, w, h9).stroke(BORDER);
       doc.font(FONT_BOLD).fontSize(6);
       doc.text('CÁLCULO DO ISSQN', MARGIN + 2, y + 1, { width: w - 4, height: 7 });
-      const cols9 = 4;
-      const col9W = w / cols9;
-      for (let i = 1; i < cols9; i++) {
-        doc.moveTo(MARGIN + i * col9W, y + 7).lineTo(MARGIN + i * col9W, y + h9).stroke(COLOR_BORDER);
-      }
-      const labels9 = [
+
+      const col9W = w / 4;
+      vDividers(MARGIN, y + 8, y + h9, [col9W, 2*col9W, 3*col9W]);
+
+      const row9 = [
         { label: 'INSCRIÇÃO MUNICIPAL', val: data.emit.im || '' },
         { label: 'VALOR TOTAL DOS SERVIÇOS', val: '' },
         { label: 'BASE DE CÁLCULO DO ISSQN', val: '' },
         { label: 'VALOR DO ISSQN', val: '' },
       ];
-      labels9.forEach((c, i) => {
-        const cx = MARGIN + i * col9W;
-        doc.font(FONT_REG).fontSize(5);
-        doc.text(c.label, cx + 2, y + 8, { width: col9W - 4, height: 7 });
+      row9.forEach((c, i) => {
+        drawCell(MARGIN + i * col9W, y + 8, col9W, 6, c.label, c.val, { valSize: 6 });
       });
 
       y += h9;
 
       // ============================================================
-      // BLOCO 10: DADOS DOS PRODUTOS / SERVIÇOS
+      // BLOCO 10: DADOS DOS PRODUTOS (80 pts)
       // ============================================================
-      const h10 = 90;
-      doc.rect(MARGIN, y, w, h10).stroke(COLOR_BORDER);
+      const h10 = 80;
+      doc.rect(MARGIN, y, w, h10).stroke(BORDER);
       doc.font(FONT_BOLD).fontSize(6);
       doc.text('DADOS DOS PRODUTOS / SERVIÇOS', MARGIN + 2, y + 1, { width: w - 4, height: 7 });
 
-      // Cabeçalho da tabela (1 linha)
-      const y10h = y + 9;
-      doc.moveTo(MARGIN, y10h).lineTo(MARGIN + w, y10h).stroke(COLOR_BORDER);
+      // Cabeçalho da tabela (7 pts)
+      const y10h = y + 8;
+      hDivider(MARGIN, y10h, w);
 
       // Colunas: CÓD | DESC | NCM | CST | CFOP | UN | QTD | V.UNIT | V.TOT | BC.ICMS | V.ICMS | V.IPI | ALIQ.ICMS | ALIQ.IPI
       const cols10 = [
-        { label: 'CÓD. PROD', w: w * 0.10 },
-        { label: 'DESCRIÇÃO DOS PRODUTOS / SERVIÇOS', w: w * 0.30 },
+        { label: 'CÓD. PROD', w: w * 0.09 },
+        { label: 'DESCRIÇÃO DOS PRODUTOS / SERVIÇOS', w: w * 0.27 },
         { label: 'NCM/SH', w: w * 0.06 },
         { label: 'CST', w: w * 0.04 },
         { label: 'CFOP', w: w * 0.05 },
         { label: 'UN', w: w * 0.03 },
-        { label: 'QUANTIDADE', w: w * 0.08 },
-        { label: 'V.UNITÁRIO', w: w * 0.08 },
+        { label: 'QUANTIDADE', w: w * 0.07 },
+        { label: 'V.UNITÁRIO', w: w * 0.07 },
         { label: 'V. TOTAL', w: w * 0.07 },
         { label: 'BC. ICMS', w: w * 0.07 },
         { label: 'V.ICMS', w: w * 0.06 },
         { label: 'V. IPI', w: w * 0.06 },
+        { label: 'ALIQ. ICMS', w: w * 0.06 },
+        { label: 'ALIQ. IPI', w: w * 0.06 },
       ];
 
-      let cxProd = MARGIN;
-      cols10.forEach((c, i) => {
-        if (i > 0) doc.moveTo(cxProd, y10h).lineTo(cxProd, y + h10).stroke(COLOR_BORDER);
-        doc.font(FONT_BOLD).fontSize(5);
-        doc.text(c.label, cxProd + 1, y10h + 1, { width: c.w - 2, height: 12 });
-        cxProd += c.w;
+      let xpos: number = MARGIN;
+      const col10Xs: number[] = [xpos];
+      cols10.forEach((c) => {
+        if (col10Xs.length > 1) {
+          doc.moveTo(xpos, y10h).lineTo(xpos, y + h10).stroke(BORDER);
+        }
+        doc.font(FONT_BOLD).fontSize(4.5);
+        doc.text(c.label, xpos + 1, y10h + 1, { width: c.w - 2, height: 14 });
+        col10Xs.push(xpos + c.w);
+        xpos += c.w;
       });
 
       // Itens
-      let y10 = y10h + 14;
-      const maxItens = data.produtos.length;
-      for (let i = 0; i < maxItens && y10 < y + h10 - 12; i++) {
+      let yItem = y10h + 14;
+      const maxItemY = y + h10 - 3;
+      for (let i = 0; i < data.produtos.length && yItem < maxItemY; i++) {
         const p = data.produtos[i];
-        cxProd = MARGIN;
         const rowVals = [
-          { val: p.codProd, w: cols10[0].w },
-          { val: p.descricao, w: cols10[1].w },
-          { val: p.ncm, w: cols10[2].w },
-          { val: p.cst, w: cols10[3].w },
-          { val: p.cfop, w: cols10[4].w },
-          { val: p.unidade, w: cols10[5].w },
-          { val: formatNum4(p.quantidade), w: cols10[6].w },
-          { val: formatMoney(p.valorUnit), w: cols10[7].w },
-          { val: formatMoney(p.valorTotal), w: cols10[8].w },
-          { val: formatMoney(p.bcIcms), w: cols10[9].w },
-          { val: formatMoney(p.valorIcms), w: cols10[10].w },
-          { val: formatMoney(p.valorIpi), w: cols10[11].w },
+          p.codProd, p.descricao, p.ncm, p.cst, p.cfop, p.unidade,
+          formatNum4(p.quantidade), formatMoney(p.valorUnit),
+          formatMoney(p.valorTotal), formatMoney(p.bcIcms),
+          formatMoney(p.valorIcms), formatMoney(p.valorIpi),
+          formatPct(p.aliquotaIcms), formatPct(p.aliquotaIpi),
         ];
-        rowVals.forEach((rv) => {
+        for (let j = 0; j < cols10.length; j++) {
+          const cx = col10Xs[j];
+          const cw = cols10[j].w;
           doc.font(FONT_REG).fontSize(5);
-          // Descrição usa mais altura
-          const isDesc = rv === rowVals[1];
-          const h = isDesc ? 12 : 8;
-          doc.text(rv.val, cxProd + 1, y10, { width: rv.w - 2, height: h });
-          cxProd += rv.w;
-        });
-        // Aliquotas em linha separada abaixo do item
-        cxProd = MARGIN;
-        // Aliq. ICMS e Aliq. IPI ficam abaixo
-        const y10b = y10 + 10;
-        // Linha horizontal separadora entre itens
-        if (i < maxItens - 1) {
-          doc.moveTo(MARGIN, y10b + 4).lineTo(MARGIN + w, y10b + 4).stroke(COLOR_BORDER);
+          const isDesc = j === 1;
+          // Descrição: multiline, outras cells: 1 linha
+          if (isDesc) {
+            doc.text(rowVals[j], cx + 1, yItem, { width: cw - 2, height: 14 });
+          } else {
+            doc.text(rowVals[j], cx + 1, yItem, { width: cw - 2, height: 6 });
+          }
         }
-        // Aliquotas ICMS/IPI na linha abaixo
-        doc.font(FONT_REG).fontSize(5);
-        let aliqXCx = MARGIN;
-        for (let j = 0; j < cols10.length; j++) aliqXCx += cols10[j].w;
-        // Alíquotas são mostradas inline no item acima (já incluídas)
-        y10 = y10b + 6;
+        yItem += 14;
+        // Linha divisória entre itens
+        if (i < data.produtos.length - 1) {
+          hDivider(MARGIN, yItem, w);
+        }
       }
 
       y += h10;
 
       // ============================================================
-      // BLOCO 11: DADOS ADICIONAIS (info compl + fisco)
+      // BLOCO 11: DADOS ADICIONAIS (80 pts)
       // ============================================================
-      const h11 = 90;
-      doc.rect(MARGIN, y, w, h11).stroke(COLOR_BORDER);
+      const h11 = 80;
+      doc.rect(MARGIN, y, w, h11).stroke(BORDER);
       doc.font(FONT_BOLD).fontSize(6);
       doc.text('DADOS ADICIONAIS', MARGIN + 2, y + 1, { width: w - 4, height: 7 });
 
-      const y11l1 = y + 9;
-      const w11a = w * 0.65;
-      const w11b = w - w11a;
-      doc.moveTo(MARGIN + w11a, y + 9).lineTo(MARGIN + w11a, y + h11).stroke(COLOR_BORDER);
-      doc.moveTo(MARGIN, y11l1).lineTo(MARGIN + w, y11l1).stroke(COLOR_BORDER);
+      const y11l1 = y + 8;
+      hDivider(MARGIN, y11l1, w);
+      const w11a = w * 0.65, w11b = w - w11a;
+      doc.moveTo(MARGIN + w11a, y11l1).lineTo(MARGIN + w11a, y + h11).stroke(BORDER);
 
-      doc.font(FONT_BOLD).fontSize(5);
-      doc.text('INFORMAÇÕES COMPLEMENTARES', MARGIN + 2, y11l1 + 1, { width: w11a - 4, height: 7 });
-      doc.font(FONT_REG).fontSize(5);
-      doc.text(data.infCpl || '', MARGIN + 2, y11l1 + 9, { width: w11a - 4, height: h11 - 12 });
-
-      doc.font(FONT_BOLD).fontSize(5);
-      doc.text('RESERVADO AO FISCO', MARGIN + w11a + 2, y11l1 + 1, { width: w11b - 4, height: 7 });
-      doc.font(FONT_REG).fontSize(5);
-      doc.text(data.infCplFisco || '', MARGIN + w11a + 2, y11l1 + 9, { width: w11b - 4, height: h11 - 12 });
+      drawCell(MARGIN, y11l1, w11a, h11 - 8, 'INFORMAÇÕES COMPLEMENTARES', data.infCpl || '', { valSize: 5, multiline: true });
+      drawCell(MARGIN + w11a, y11l1, w11b, h11 - 8, 'RESERVADO AO FISCO', data.infCplFisco || '', { valSize: 5, multiline: true });
 
       y += h11;
 
@@ -830,8 +677,10 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
       // RODAPÉ
       // ============================================================
       doc.font(FONT_REG).fontSize(5);
-      const rodape = `DANFE gerado por MGBP NF-e Middleware em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`;
-      doc.text(rodape, MARGIN, PAGE_H - 12, { width: w, align: 'center' });
+      doc.text(
+        `DANFE gerado por MGBP NF-e Middleware em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
+        MARGIN, PAGE_H - 10, { width: w, align: 'center' }
+      );
 
       doc.end();
     } catch (e) {
@@ -864,8 +713,8 @@ function formatCep(cep?: string): string {
 
 function formatFone(fone?: string): string {
   const s = String(fone || '').replace(/\D/g, '');
-  if (s.length === 11) return s.replace(/^(\d{2})(\d{5})(\d{4})/, '($1)$2-$3');
-  if (s.length === 10) return s.replace(/^(\d{2})(\d{4})(\d{4})/, '($1)$2-$3');
+  if (s.length === 11) return s.replace(/^(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+  if (s.length === 10) return s.replace(/^(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
   return fone || '';
 }
 
@@ -874,12 +723,10 @@ function formatDate(iso?: string): string {
   try {
     const d = new Date(iso);
     if (isNaN(d.getTime())) return '';
-    return d.toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      timeZone: 'America/Sao_Paulo',
-    }).substring(0, 10);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
   } catch { return ''; }
 }
 
@@ -888,11 +735,7 @@ function formatTime(iso?: string): string {
   try {
     const d = new Date(iso);
     if (isNaN(d.getTime())) return '';
-    return d.toLocaleString('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'America/Sao_Paulo',
-    });
+    return d.toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
   } catch { return ''; }
 }
 
@@ -902,12 +745,8 @@ function formatDateTime(iso?: string): string {
     const d = new Date(iso);
     if (isNaN(d.getTime())) return '';
     return d.toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
       timeZone: 'America/Sao_Paulo',
     });
   } catch { return ''; }
@@ -915,10 +754,7 @@ function formatDateTime(iso?: string): string {
 
 function formatMoney(n?: number): string {
   if (n === undefined || n === null || isNaN(n)) return '';
-  return Number(n).toLocaleString('pt-BR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatNum3(n?: number): string {
@@ -929,4 +765,9 @@ function formatNum3(n?: number): string {
 function formatNum4(n?: number): string {
   if (n === undefined || n === null || isNaN(n)) return '';
   return Number(n).toFixed(4).replace('.', ',');
+}
+
+function formatPct(n?: number): string {
+  if (n === undefined || n === null || isNaN(n) || n === 0) return '';
+  return Number(n).toFixed(2).replace('.', ',');
 }
