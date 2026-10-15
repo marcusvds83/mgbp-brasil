@@ -121,7 +121,7 @@ export async function searchRead<T = Record<string, unknown>>(
       opts.offset ?? 0,
     ], opts.order ? { order: opts.order } : {});
     if (!ids || !ids.length) return [];
-    return executeKw<T[]>(model, 'read', [ids, fields]);
+    return await executeKw<T[]>(model, 'search_read', [[['id', 'in', ids]], fields]);
   }
 }
 
@@ -144,7 +144,26 @@ export async function read<T = Record<string, unknown>>(
   ids: number[],
   fields: string[]
 ): Promise<T[]> {
-  return executeKw<T[]>(model, 'read', [ids, { fields }]);
+  if (!ids.length) return [];
+  // stock.location: buscar um por vez com id= (evita bug stock_barcode)
+  if (model === 'stock.location') {
+    const results: T[] = [];
+    for (const id of ids) {
+      try {
+        const r = await executeKw<T[]>(model, 'search_read', [
+          [['id', '=', id]],
+          fields,
+        ]);
+        if (r && r.length) results.push(r[0]);
+      } catch (e) { /* ignore */ }
+    }
+    return results;
+  }
+  // Outros modelos: search_read com id in
+  return await executeKw<T[]>(model, 'search_read', [
+    [['id', 'in', ids]],
+    fields,
+  ]);
 }
 
 /** write() - atualiza registros. */
