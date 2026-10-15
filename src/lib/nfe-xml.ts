@@ -235,7 +235,7 @@ function tagProduto(p: ProdutoData): string {
     `<qCom>${formatNum(p.qCom, 4)}</qCom>` +
     `<vUnCom>${formatNum(p.vUnCom, 10)}</vUnCom>` +
     `<vProd>${formatNum(p.vProd, 2)}</vProd>` +
-    `<cEANTrib/><cBarraTrib/>` +
+    `<cEANTrib>SEM GTIN</cEANTrib><cBarraTrib>SEM GTIN</cBarraTrib>` +
     `<indTot>1</indTot>` +
     `</prod>`;
 
