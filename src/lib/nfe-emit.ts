@@ -415,10 +415,10 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
       partner._uf,
       !!partner._ie
     );
-    const cfop = (line.x_mgbp_cfop as string) ||
+    const cfop = isHomolog ? '5102' : ((line.x_mgbp_cfop as string) ||
                  (product?.x_mgbp_cfop as string) ||
                  (move.x_mgbp_nfe_cfop as string) ||
-                 cfopDefault;
+                 cfopDefault);
 
     // NCM - linha > produto > config default
     const ncm = (line.x_mgbp_ncm as string) ||
