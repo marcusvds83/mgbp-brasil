@@ -506,7 +506,9 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
 
   // 13. Monta dados do NFe
   const serie = (company.x_mgbp_nfe_serie as string) || config.nfe.seriePadrao;
-  const dhEmi = new Date().toISOString().substring(0, 19) + '-03:00';
+  const now = new Date();
+  const spDate = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  const dhEmi = spDate.toISOString().substring(0, 19) + '-03:00';
   const totalNF = move.amount_total;
 
   // Extrai IE do emitente
