@@ -33,7 +33,7 @@
  *   x_mgbp_emite_nf           (Boolean - apenas 01, 03, 11 = True)
  */
 
-import { config, odooConfigured } from './config';
+import { config, odooConfigured, isHomolog } from './config';
 import {
   authenticate,
   executeKw,
@@ -539,7 +539,7 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
     dest: {
       cnpj: partner._cnpj,
       cpf: partner._cpf,
-      xNome: partner.legal_name || partner.name,
+      xNome: isHomolog ? 'NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL' : (partner.legal_name || partner.name),
       xLgr: partner.street,
       nro: partner.street2,
       xBairro: (partner.district as string),
