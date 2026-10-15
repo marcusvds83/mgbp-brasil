@@ -359,7 +359,7 @@ function gerarImpostos(p: ProdutoData): string {
   const pis = `<PIS>` +
     (regime === 'simples_nacional'
       ? `<PISNT><CST>${p.pisCst || '08'}</CST></PISNT>`
-      : `<PISAliq><CST>${p.pisCst || '01'}</CST><vBC>${formatNum(vProd, 2)}</vBC><pPIS>0.6500</pPIS><vPIS>${formatNum(vProd * 0.0065, 2)}</vPIS></PISAliq>`) +
+      : `<PISAliq><CST>${p.pisCst || '01'}</CST><vBC>${formatNum(vProd, 2)}</vBC><pPIS>1.6500</pPIS><vPIS>${formatNum(vProd * 0.0165, 2)}</vPIS></PISAliq>`) +
     `</PIS>`;
 
   // COFINS - CST 08 (não tributado) para Simples
@@ -367,11 +367,11 @@ function gerarImpostos(p: ProdutoData): string {
   const cofins = `<COFINS>` +
     (regime === 'simples_nacional'
       ? `<COFINSNT><CST>${p.cofinsCst || '08'}</CST></COFINSNT>`
-      : `<COFINSAliq><CST>${p.cofinsCst || '01'}</CST><vBC>${formatNum(vProd, 2)}</vBC><pCOFINS>3.0000</pCOFINS><vCOFINS>${formatNum(vProd * 0.03, 2)}</vCOFINS></COFINSAliq>`) +
+      : `<COFINSAliq><CST>${p.cofinsCst || '01'}</CST><vBC>${formatNum(vProd, 2)}</vBC><pCOFINS>7.6000</pCOFINS><vCOFINS>${formatNum(vProd * 0.076, 2)}</vCOFINS></COFINSAliq>`) +
     `</COFINS>`;
 
   // Tributos aproximados (19% default para eletrodomésticos importados)
-  const vTotTrib = +(vProd * 0.19).toFixed(2);
+  const vTotTrib = 0;
 
   return `<imposto>` +
     `<vTotTrib>${formatNum(vTotTrib, 2)}</vTotTrib>` +
@@ -519,8 +519,8 @@ export function gerarXmlNFe(data: NFeData): string {
   const det = data.produtos.map((p) => tagProduto(p)).join('');
 
   // Total
-  const vPIS = data.produtos.reduce((s, p) => s + ((p.vProd || 0) * 0.0065), 0);
-  const vCOFINS = data.produtos.reduce((s, p) => s + ((p.vProd || 0) * 0.03), 0);
+  const vPIS = data.produtos.reduce((s, p) => s + ((p.vProd || 0) * 0.0165), 0);
+  const vCOFINS = data.produtos.reduce((s, p) => s + ((p.vProd || 0) * 0.076), 0);
   const total = `<total>` +
     `<ICMSTot>` +
     `<vBC>${formatNum(vProd, 2)}</vBC>` +
@@ -542,7 +542,7 @@ export function gerarXmlNFe(data: NFeData): string {
     `<vCOFINS>${formatNum(vCOFINS, 2)}</vCOFINS>` +
     `<vOutro>${formatNum(data.vOutro || 0, 2)}</vOutro>` +
     `<vNF>${formatNum(vNF, 2)}</vNF>` +
-    `<vTotTrib>${formatNum(data.produtos.reduce((s, p) => s + ((p.vProd || 0) * 0.19), 0), 2)}</vTotTrib>` +
+    `<vTotTrib>${formatNum(0, 2)}</vTotTrib>` +
     `</ICMSTot>` +
     `</total>`;
 
@@ -587,7 +587,7 @@ export function gerarXmlNFe(data: NFeData): string {
   }
 
   // Tributos aproximados (IBPT)
-  const vTotTrib = +(vProd * 0.19).toFixed(2);
+  const vTotTrib = 0;
   infCpl = (infCpl ? infCpl + ' | ' : '') +
     `Valor total aproximado de tributos: Federais R$ 0,00 (0%), Estaduais R$ 0,00 (0%), Municipais R$ 0,00 (0%). Fonte IBPT.`;
 
