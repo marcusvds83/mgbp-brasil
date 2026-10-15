@@ -178,6 +178,7 @@ function tagEnder(ender: EnderecoData, tagPrefix: 'emit' | 'dest'): string {
     crtTag +
     emailTag +
     `</${tagPrefix}>`;
+}
 
 // ============================================================
 // Tags de produto (det + prod + impostos)
