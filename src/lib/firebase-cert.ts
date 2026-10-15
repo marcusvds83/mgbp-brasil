@@ -46,6 +46,7 @@ let cache: CachedCert | null = null;
 //   2. JSON inteiro da service account colado em FIREBASE_PRIVATE_KEY (parseado em runtime)
 //   3. Service account persistida no Firestore (via POST /api/v1/firebase/service-account)
 import { initFirebase as initFirebaseFromConfig, getFirestoreDb } from './firebase-config';
+import { firebaseRest } from './firebase-rest';
 
 let db: any = null;
 let firebaseReady = false;
@@ -113,7 +114,7 @@ export async function salvarCertificado(
       uploadEm: new Date().toISOString(),
       atualizadoEm: new Date().toISOString(),
     };
-    await db.collection(config.firebase.collection).doc(config.firebase.docId).set(doc);
+    await firebaseRest.setDoc(config.firebase.collection, config.firebase.docId, doc);
     console.log(
       `[FIREBASE-CERT] Certificado salvo no Firebase. Titular: ${aberto.info.titular} | CNPJ: ${aberto.info.cnpj}`
     );
@@ -167,12 +168,12 @@ export async function carregarCertificado(): Promise<CachedCert | null> {
     return null;
   }
   try {
-    const snap = await db.collection(config.firebase.collection).doc(config.firebase.docId).get();
-    if (!snap.exists) {
+    const snap = await firebaseRest.getDoc(config.firebase.collection, config.firebase.docId);
+    if (!snap || !snap.pfxBase64) {
       console.warn('[FIREBASE-CERT] Nenhum certificado encontrado no Firebase.');
       return null;
     }
-    const doc = snap.data()!;
+    const doc = snap || {};
     if (!doc.pfxBase64 || !doc.senhaCifrada) {
       console.error('[FIREBASE-CERT] Documento do Firebase esta incompleto.');
       return null;
@@ -218,11 +219,11 @@ export async function statusCertificado(): Promise<Record<string, unknown>> {
     return { configurado: false, erro: 'Firebase nao configurado e env vars ausentes' };
   }
   try {
-    const snap = await db.collection(config.firebase.collection).doc(config.firebase.docId).get();
-    if (!snap.exists) {
+    const snap = await firebaseRest.getDoc(config.firebase.collection, config.firebase.docId);
+    if (!snap || !snap.pfxBase64) {
       return { configurado: false, mensagem: 'Nenhum certificado A1 no Firebase.' };
     }
-    const doc = snap.data()!;
+    const doc = snap || {};
     return {
       configurado: true,
       origem: 'firebase',
@@ -239,7 +240,7 @@ export async function removerCertificado(): Promise<boolean> {
   await initFirebase();
   if (db) {
     try {
-      await db.collection(config.firebase.collection).doc(config.firebase.docId).delete();
+      await firebaseRest.deleteDoc(config.firebase.collection, config.firebase.docId);
     } catch (e) {
       console.warn('[FIREBASE-CERT] Falha ao deletar do Firebase:', (e as Error).message);
     }
