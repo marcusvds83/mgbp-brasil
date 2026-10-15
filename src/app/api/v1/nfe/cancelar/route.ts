@@ -189,8 +189,12 @@ export async function POST(req: NextRequest) {
         await create('mail.message', {
           model: 'account.move',
           res_id: move_id,
-          body: `<b>NF-e Cancelada</b><br/>Justificativa: ${escapeXml(just)}`,
+          body: 'NF-e CANCELADA na SEFAZ\n' +
+                'Data: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + '\n' +
+                'Justificativa: ' + just + '\n' +
+                'cStat: ' + cStat + ' - ' + xMotivo,
           message_type: 'comment',
+          subtype_xmlid: 'mail.mt_comment',
         });
       } catch (e) {
         console.warn('[NFE-CANCEL] Falha ao postar no chatter:', (e as Error).message);

@@ -607,18 +607,20 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
     }
     await write('account.move', [moveId], updateData);
 
-    // Mensagem no chatter
+    // Mensagem no chatter (texto plain, sem HTML)
     await executeKw('mail.message', 'create', [{
       model: 'account.move',
       res_id: moveId,
-      body: `<b>NF-e Autorizada!</b><br/>` +
-            `Chave: ${resultado.chave}<br/>` +
-            `Protocolo: ${resultado.protocolo}<br/>` +
-            `cStat: ${resultado.cStat} - ${resultado.xMotivo}`,
+      body: 'NF-e AUTORIZADA na SEFAZ\n' +
+            'Chave: ' + resultado.chave + '\n' +
+            'Protocolo: ' + resultado.protocolo + '\n' +
+            'cStat: ' + resultado.cStat + ' - ' + resultado.xMotivo + '\n' +
+            'Data: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
       message_type: 'comment',
+      subtype_xmlid: 'mail.mt_comment',
     }]);
 
-    // Anexa XML no chatter
+      // Anexa XML no chatter
     try {
       const xmlNome = `NFe-${resultado.chave}.xml`;
       await uploadAnexo(
@@ -626,7 +628,7 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
         xmlNome,
         resultado.nfeProc,
         'application/xml',
-        `<b>XML NF-e ${proximoNumero}</b>`
+        'XML NF-e ' + proximoNumero
       );
     } catch (e) {
       console.error('[NFE-EMIT] Falha ao anexar XML:', (e as Error).message);
@@ -641,10 +643,22 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
       await uploadAnexo(
         'account.move', moveId,
         pdfNome, pdfBuf, 'application/pdf',
-        `<b>DANFE ${proximoNumero}</b>`
+        'DANFE ' + proximoNumero
       );
     } catch (e) {
       console.error('[NFE-EMIT] Falha ao gerar/anexar DANFE:', (e as Error).message);
+      // Tenta postar no chatter mesmo com erro de DANFE
+      try {
+        await executeKw('mail.message', 'create', [{
+          model: 'account.move',
+          res_id: moveId,
+          body: 'AVISO: NF-e AUTORIZADA mas houve falha ao gerar o DANFE.\n' +
+                'Erro: ' + (e as Error).message + '\n' +
+                'XML NF-e foi anexado. O DANFE pode ser baixado posteriormente.',
+          message_type: 'comment',
+          subtype_xmlid: 'mail.mt_comment',
+        }]);
+      } catch {}
     }
 
     console.log(`[NFE-EMIT] NF-e ${proximoNumero} autorizada para ${move.name}`);
@@ -669,7 +683,7 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
   }
 }
 
-/** Atualiza fatura como erro e posta no chatter. */
+/** Atualiza fatura como erro e posta no chatter (texto plain). */
 async function safeUpdateError(moveId: number, errMsg: string) {
   try {
     await write('account.move', [moveId], {
@@ -679,8 +693,11 @@ async function safeUpdateError(moveId: number, errMsg: string) {
     await executeKw('mail.message', 'create', [{
       model: 'account.move',
       res_id: moveId,
-      body: `<b>Erro na Emissão de NF-e</b><br/>${errMsg.substring(0, 500)}`,
+      body: 'ERRO na Emissão de NF-e\n' +
+            'Data: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + '\n' +
+            'Detalhe: ' + errMsg.substring(0, 800),
       message_type: 'comment',
+      subtype_xmlid: 'mail.mt_comment',
     }]);
   } catch (e) {
     console.error('[NFE-EMIT] Falha ao registrar erro:', (e as Error).message);
@@ -740,12 +757,14 @@ function getMunicipioCode(cidade: string, uf: string): string {
   return map[cidade] || config.mgbp.codMunEmitente;
 }
 
-/** Extrai dados para o DANFE a partir do XML autorizado. */
-function extrairDadosDanfe(
+/** Extrai dados completos para o DANFE a partir do XML nfeProc autorizado pela SEFAZ.
+ *  Lê todos os campos do XML assinado + protocolo de autorização. */
+export function extrairDadosDanfe(
   nfeProcXml: string,
   nfeData: NFeData,
   valorTotal: number
 ): import('./danfe-pdf').DanfeData {
+  // Helper: pega primeira ocorrência da tag (sem recursão)
   function tag(name: string): string {
     const m = nfeProcXml.match(
       new RegExp('<' + name + '[^>]*>([\\s\\S]*?)<\\/' + name + '>', 'i')
@@ -753,50 +772,185 @@ function extrairDadosDanfe(
     return m ? m[1].trim() : '';
   }
 
+  // Helper: pega TODAS as ocorrências (para itens e duplicatas)
+  function tagAll(name: string, parentXml?: string): string[] {
+    const xml = parentXml || nfeProcXml;
+    const re = new RegExp('<' + name + '[^>]*>([\\s\\S]*?)<\\/' + name + '>', 'gi');
+    const out: string[] = [];
+    let m;
+    while ((m = re.exec(xml)) !== null) {
+      out.push(m[1].trim());
+    }
+    return out;
+  }
+
+  // Helper: tag dentro de um trecho XML específico
+  function tagIn(xml: string, name: string): string {
+    const m = xml.match(new RegExp('<' + name + '[^>]*>([\\s\\S]*?)<\\/' + name + '>', 'i'));
+    return m ? m[1].trim() : '';
+  }
+
+  // === Identificação ===
   const chave = (nfeProcXml.match(/Id="(NFe\d{44})"/) || [])[1]?.slice(3) || '';
   const nNF = tag('nNF');
   const serie = tag('serie');
   const dhEmi = tag('dhEmi');
   const nProt = tag('nProt');
+  const dhRecBto = tag('dhRecBto');
+  const natOp = tag('natOp');
+  const tpNF = tag('tpNF') || '1';
+  const mod = tag('mod') || '55';
+  const infCpl = tag('infCpl');
+
+  // === Emitente ===
+  const emitXml = nfeProcXml.match(/<emit>([\s\S]*?)<\/emit>/i)?.[1] || '';
+  const emit = {
+    nome: tagIn(emitXml, 'xNome') || tagIn(emitXml, 'xFant') || nfeData.emit.xNome || '',
+    cnpj: tagIn(emitXml, 'CNPJ'),
+    cpf: tagIn(emitXml, 'CPF'),
+    ie: tagIn(emitXml, 'IE'),
+    iest: tagIn(emitXml, 'IEST'),
+    im: tagIn(emitXml, 'IM'),
+    endereco: tagIn(emitXml, 'xLgr'),
+    numero: tagIn(emitXml, 'nro'),
+    complemento: tagIn(emitXml, 'xCpl'),
+    bairro: tagIn(emitXml, 'xBairro'),
+    cidade: tagIn(emitXml, 'xMun'),
+    uf: tagIn(emitXml, 'UF'),
+    cep: tagIn(emitXml, 'CEP'),
+    fone: tagIn(emitXml, 'fone'),
+    pais: tagIn(emitXml, 'xPais') || 'Brasil',
+  };
+
+  // === Destinatário ===
+  const destXml = nfeProcXml.match(/<dest>([\s\S]*?)<\/dest>/i)?.[1] || '';
+  const dest = destXml ? {
+    nome: tagIn(destXml, 'xNome') || nfeData.dest?.xNome || '',
+    cnpj: tagIn(destXml, 'CNPJ'),
+    cpf: tagIn(destXml, 'CPF'),
+    ie: tagIn(destXml, 'IE'),
+    endereco: tagIn(destXml, 'xLgr'),
+    numero: tagIn(destXml, 'nro'),
+    complemento: tagIn(destXml, 'xCpl'),
+    bairro: tagIn(destXml, 'xBairro'),
+    cidade: tagIn(destXml, 'xMun'),
+    uf: tagIn(destXml, 'UF'),
+    cep: tagIn(destXml, 'CEP'),
+    fone: tagIn(destXml, 'fone'),
+    pais: tagIn(destXml, 'xPais') || 'Brasil',
+  } : undefined;
+
+  // === Transportadora ===
+  const transpXml = nfeProcXml.match(/<transp>([\s\S]*?)<\/transp>/i)?.[1] || '';
+  const transportadora = transpXml ? {
+    nome: tagIn(transpXml, 'xNome'),
+    fretePorConta: tagIn(transpXml, 'modFrete') || '0',
+    cnpj: tagIn(transpXml, 'CNPJ') || tagIn(transpXml, 'CPF'),
+    ie: tagIn(transpXml, 'IE'),
+    endereco: tagIn(transpXml, 'xEnder'),
+    cidade: tagIn(transpXml, 'xMun'),
+    uf: tagIn(transpXml, 'UF'),
+    antt: tagIn(transpXml, 'RNTC'),
+    placa: tagIn(transpXml, 'placa'),
+    ufVeiculo: tagIn(transpXml, 'UF') ? tagIn(transpXml, 'UF') : '',
+    quantidade: tagIn(transpXml, 'qVol') ? parseFloat(tagIn(transpXml, 'qVol')) : undefined,
+    especie: tagIn(transpXml, 'esp'),
+    marca: tagIn(transpXml, 'marca'),
+    numero: tagIn(transpXml, 'nVol'),
+    pesoBruto: tagIn(transpXml, 'pesoB') ? parseFloat(tagIn(transpXml, 'pesoB')) : undefined,
+    pesoLiquido: tagIn(transpXml, 'pesoL') ? parseFloat(tagIn(transpXml, 'pesoL')) : undefined,
+  } : undefined;
+
+  // === Duplicatas ===
+  const dupsXml = tagAll('dup');
+  const duplicatas = dupsXml.map((dupXml) => ({
+    numero: tagIn(dupXml, 'nDup'),
+    vencimento: formatDateBR(tagIn(dupXml, 'dVenc')),
+    valor: parseFloat(tagIn(dupXml, 'vDup') || '0'),
+  }));
+
+  // === Totais ===
+  const icmsTotXml = nfeProcXml.match(/<ICMSTot>([\s\S]*?)<\/ICMSTot>/i)?.[1] || '';
+  const vProd = parseFloat(tagIn(icmsTotXml, 'vProd') || '0');
+  const vFrete = parseFloat(tagIn(icmsTotXml, 'vFrete') || '0');
+  const vSeg = parseFloat(tagIn(icmsTotXml, 'vSeg') || '0');
+  const vDesc = parseFloat(tagIn(icmsTotXml, 'vDesc') || '0');
+  const vOutro = parseFloat(tagIn(icmsTotXml, 'vOutro') || '0');
+  const vIPI = parseFloat(tagIn(icmsTotXml, 'vIPI') || '0');
+  const vNF = parseFloat(tagIn(icmsTotXml, 'vNF') || '0') || valorTotal;
+  const vBC = parseFloat(tagIn(icmsTotXml, 'vBC') || '0');
+  const vICMS = parseFloat(tagIn(icmsTotXml, 'vICMS') || '0');
+  const vBCST = parseFloat(tagIn(icmsTotXml, 'vBCST') || '0');
+  const vST = parseFloat(tagIn(icmsTotXml, 'vST') || '0');
+  const vTotTrib = parseFloat(tagIn(icmsTotXml, 'vTotTrib') || '0');
+
+  // === Produtos ===
+  const detXml = tagAll('det');
+  const produtos = detXml.map((det) => {
+    const prodXml = tagIn(det, 'prod');
+    const impostoXml = tagIn(det, 'imposto');
+    const icmsXml = impostoXml.match(/<ICMS>[\s\S]*?<\/ICMS>/i)?.[0] || '';
+    const ipiXml = impostoXml.match(/<IPI>[\s\S]*?<\/IPI>/i)?.[0] || '';
+    // CST ICMS (pode estar dentro de ICMS00, ICMS10, ICMS20, ICMS40, ICMS41, ICMS51, ICMS60, ICMSsn100 etc)
+    const icmsInner = icmsXml.match(/<ICMS\w+>([\s\S]*?)<\/ICMS\w+>/i)?.[1] || '';
+    const cst = tagIn(icmsInner, 'CST') || tagIn(icmsInner, 'CSOSN') || '';
+    // IPI CST
+    const ipiInner = ipiXml.match(/<IPITrib>([\s\S]*?)<\/IPITrib>/i)?.[1]
+                  || ipiXml.match(/<IPINT>([\s\S]*?)<\/IPINT>/i)?.[1] || '';
+
+    return {
+      codProd: tagIn(prodXml, 'cProd'),
+      descricao: tagIn(prodXml, 'xProd'),
+      ncm: tagIn(prodXml, 'NCM'),
+      cst,
+      cfop: tagIn(prodXml, 'CFOP'),
+      unidade: tagIn(prodXml, 'uCom'),
+      quantidade: parseFloat(tagIn(prodXml, 'qCom') || '0'),
+      valorUnit: parseFloat(tagIn(prodXml, 'vUnCom') || '0'),
+      valorTotal: parseFloat(tagIn(prodXml, 'vProd') || '0'),
+      bcIcms: parseFloat(tagIn(icmsInner, 'vBC') || '0'),
+      valorIcms: parseFloat(tagIn(icmsInner, 'vICMS') || '0'),
+      valorIpi: parseFloat(tagIn(ipiInner, 'vIPI') || '0'),
+      aliquotaIcms: parseFloat(tagIn(icmsInner, 'pICMS') || '0'),
+      aliquotaIpi: parseFloat(tagIn(ipiInner, 'pIPI') || '0'),
+    };
+  });
+
+  // === Fisco (informações adicionais do fisco) ===
+  const infAdFiscoXml = nfeProcXml.match(/<infAdFisco>([\s\S]*?)<\/infAdFisco>/i)?.[1] || '';
 
   return {
     chave,
     nNF,
     serie,
     dhEmi,
-    emit: {
-      nome: nfeData.emit.xNome || '',
-      cnpj: nfeData.emit.cnpj || '',
-      ie: nfeData.emit.ie,
-      endereco: nfeData.emit.xLgr,
-      cidade: nfeData.emit.xMun,
-      uf: nfeData.emit.uf,
-      cep: nfeData.emit.cep,
-      fone: nfeData.emit.fone,
-    },
-    dest: nfeData.dest ? {
-      nome: nfeData.dest.xNome || '',
-      cnpj: nfeData.dest.cnpj,
-      cpf: nfeData.dest.cpf,
-      endereco: nfeData.dest.xLgr,
-      cidade: nfeData.dest.xMun,
-      uf: nfeData.dest.uf,
-      cep: nfeData.dest.cep,
-      fone: nfeData.dest.fone,
-    } : undefined,
-    valorTotal,
-    produtos: nfeData.produtos.map((p) => ({
-      codProd: p.cProd || '',
-      descricao: p.xProd,
-      ncm: p.ncm,
-      cfop: p.cfop,
-      unidade: p.uCom,
-      quantidade: p.qCom,
-      valorUnit: p.vUnCom,
-      valorTotal: p.vProd,
-    })),
+    folhaAtual: 1,
+    folhaTotal: 1,
+    tpNF,
+    natOp,
+    emit,
+    dest,
+    transportadora,
+    duplicatas,
+    vProd, vFrete, vSeg, vDesc, vOutro, vIPI, vNF,
+    vBC, vICMS, vBCST, vST, vTotTrib,
+    produtos,
     protocolo: nProt,
-    dhAutorizacao: dhEmi,
-    infCpl: '',
+    dhAutorizacao: dhRecBto || dhEmi,
+    infCpl,
+    infCplFisco: infAdFiscoXml,
   };
+}
+
+/** Formata data ISO em DD/MM/AAAA (formato BR para DANFE). */
+function formatDateBR(iso?: string): string {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  } catch { return iso || ''; }
 }
