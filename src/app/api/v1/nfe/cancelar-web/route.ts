@@ -113,14 +113,18 @@ export async function GET(req: NextRequest) {
     await write('account.move', [moveId], { x_mgbp_nfe_status: 'cancelar_solicitado' });
 
     // Monta XML do evento de cancelamento (tpEvento=110111)
-    const idEvento = String(Date.now()).slice(-15).padStart(15, '0');
-    const dhEvento = new Date().toISOString().substring(0, 19) + '-03:00';
+    // Id do evento: ID + cOrgao(2) + tpEvento(6) + CNPJ_emitente(14) + chNFe(44) + nSeqEvento(1)
+    // Total: 2+6+14+44+1 = 67 dígitos depois de 'ID'
+    // ANTES estava errado: ID + cOrgao + 110111 + chave + idEvento(15) + 01 = 69 chars (rejeitado cStat 215)
     const cOrgao = chave.substring(0, 2);
+    const nSeqEvento = '1';
+    const idEventoRef = `${cOrgao}110111${cert.info.cnpj}${chave}${nSeqEvento}`;
+    const dhEvento = new Date().toISOString().substring(0, 19) + '-03:00';
 
     const eventoXml =
       `<?xml version="1.0" encoding="UTF-8"?>` +
       `<evento xmlns="${NS}" versao="1.00">` +
-      `<infEvento Id="ID${cOrgao}110111${chave}${idEvento}01">` +
+      `<infEvento Id="ID${idEventoRef}">` +
       `<cOrgao>${cOrgao}</cOrgao>` +
       `<tpAmb>${config.nfe.tpAmb}</tpAmb>` +
       `<CNPJ>${cert.info.cnpj}</CNPJ>` +
@@ -148,7 +152,7 @@ export async function GET(req: NextRequest) {
       xpath: "//*[local-name(.)='infEvento']",
       transforms: ['http://www.w3.org/2000/09/xmldsig#enveloped-signature', 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315'],
       digestAlgorithm: 'http://www.w3.org/2000/09/xmldsig#sha1',
-      uri: `#ID${cOrgao}110111${chave}${idEvento}01`,
+      uri: `#ID${idEventoRef}`,
     });
     sig.computeSignature(eventoXml, {
       location: { reference: "//*[local-name(.)='infEvento']", action: 'after' },
