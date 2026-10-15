@@ -29,6 +29,7 @@
 
 import crypto from 'crypto';
 import { config } from './config';
+import { firebaseRest } from './firebase-rest';
 
 // === Cache em memória ===
 interface CachedServiceAccount {
@@ -221,7 +222,7 @@ export async function salvarServiceAccount(saJson: any): Promise<{
   const privateKeyCifrada = encryptSenha(saJson.private_key);
   const uploadedAt = new Date().toISOString();
 
-  await _db.collection('config').doc('firebase-service-account').set({
+  await firebaseRest.setDoc('config', 'firebase-service-account', {
     projectId: saJson.project_id,
     clientEmail: saJson.client_email,
     privateKeyCifrada,
@@ -283,11 +284,11 @@ export async function statusServiceAccount(): Promise<{
     };
   }
   try {
-    const snap = await _db.collection('config').doc('firebase-service-account').get();
-    if (!snap.exists) {
+    const snap = await firebaseRest.getDoc('config', 'firebase-service-account');
+    if (!snap || !snap.logoBase64) {
       return { configurado: false, erro: 'Nenhuma service account persistida no Firestore' };
     }
-    const d = snap.data()!;
+    const d = snap || {};
     return {
       configurado: true,
       origem: 'firestore-persistido',
@@ -328,7 +329,7 @@ export async function salvarLogo(
   }
 
   const uploadedAt = new Date().toISOString();
-  await _db.collection('config').doc('mgbp-logo').set({
+  await firebaseRest.setDoc('config', 'mgbp-logo', {
     logoBase64: logoBuffer.toString('base64'),
     mimetype,
     size: logoBuffer.length,
@@ -353,11 +354,11 @@ export async function carregarLogo(): Promise<CachedLogo | null> {
   if (!ok || !_db) return null;
 
   try {
-    const snap = await _db.collection('config').doc('mgbp-logo').get();
-    if (!snap.exists) {
+    const snap = await firebaseRest.getDoc('config', 'mgbp-logo');
+    if (!snap || !snap.logoBase64) {
       return null;
     }
-    const d = snap.data()!;
+    const d = snap || {};
     if (!d.logoBase64) return null;
     const buffer = Buffer.from(d.logoBase64, 'base64');
     cachedLogo = {
@@ -393,11 +394,11 @@ export async function statusLogo(): Promise<{
     return { configurado: false, erro: 'Firebase nao inicializado' };
   }
   try {
-    const snap = await _db.collection('config').doc('mgbp-logo').get();
-    if (!snap.exists) {
+    const snap = await firebaseRest.getDoc('config', 'mgbp-logo');
+    if (!snap || !snap.logoBase64) {
       return { configurado: false, erro: 'Nenhuma logo no Firestore' };
     }
-    const d = snap.data()!;
+    const d = snap || {};
     return {
       configurado: true,
       size: d.size,
@@ -414,7 +415,7 @@ export async function removerLogo(): Promise<boolean> {
   const ok = await initFirebase();
   if (ok && _db) {
     try {
-      await _db.collection('config').doc('mgbp-logo').delete();
+      await firebaseRest.deleteDoc('config', 'mgbp-logo');
     } catch (e) {
       console.warn('[FIREBASE-CONFIG] Falha ao deletar logo:', (e as Error).message);
     }
@@ -446,7 +447,6 @@ export function invalidateConfigCache() {
 
 /** Expose db getter para outros módulos (firebase-cert.ts usa). */
 export async function getFirestoreDb(): Promise<any> {
-  if (_firebaseReady && _db) return _db;
   const ok = await initFirebase();
-  return ok ? _db : null;
+  return ok ? firebaseRest : null;
 }
