@@ -18,7 +18,7 @@
  *   - Campo customizado x_mgbp_descricao_nfe no product.product
  */
 
-import { config } from './config';
+import { config, isHomolog } from './config';
 
 const NFE_NS = 'http://www.portalfiscal.inf.br/nfe';
 
@@ -491,7 +491,7 @@ export function gerarXmlNFe(data: NFeData): string {
   // idDest: 1=interna, 2=interestadual, 3=com exterior
   const idDest = data.dest && data.dest.uf && data.emit.uf && data.dest.uf !== data.emit.uf ? 2 : 1;
   // indFinal: 0=normal (revenda), 1=consumidor final
-  const indFinal = data.tipoOperacao === 'venda_consumidor' ? 1 : 0;
+  const indFinal = isHomolog ? 1 : (data.tipoOperacao === 'venda_consumidor' ? 1 : 0);
   // indPres: 9=não se aplica (presencial)
   const indPres = '1';
 
