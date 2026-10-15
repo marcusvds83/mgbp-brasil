@@ -599,19 +599,20 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
 
       // Colunas: CÓD | DESC | NCM | CST | CFOP | UN | QTD | V.UNIT | V.TOT | BC.ICMS | V.ICMS | V.IPI | ALIQ.ICMS | ALIQ.IPI
       // alinhamento: código/descrição = left, outros = right, CST/CFOP/UN = center
+      // Larguras somam exatamente 1.00 para evitar overflow horizontal
       const cols10 = [
-        { label: 'CÓD. PROD', w: w * 0.09, align: 'left' },
+        { label: 'CÓD. PROD', w: w * 0.08, align: 'left' },
         { label: 'DESCRIÇÃO DOS PRODUTOS / SERVIÇOS', w: w * 0.27, align: 'left' },
-        { label: 'NCM/SH', w: w * 0.06, align: 'right' },
-        { label: 'CST', w: w * 0.04, align: 'center' },
-        { label: 'CFOP', w: w * 0.05, align: 'center' },
-        { label: 'UN', w: w * 0.03, align: 'center' },
-        { label: 'QUANTIDADE', w: w * 0.07, align: 'right' },
-        { label: 'V.UNITÁRIO', w: w * 0.07, align: 'right' },
-        { label: 'V. TOTAL', w: w * 0.07, align: 'right' },
-        { label: 'BC. ICMS', w: w * 0.07, align: 'right' },
-        { label: 'V.ICMS', w: w * 0.06, align: 'right' },
-        { label: 'V. IPI', w: w * 0.06, align: 'right' },
+        { label: 'NCM/SH', w: w * 0.055, align: 'right' },
+        { label: 'CST', w: w * 0.035, align: 'center' },
+        { label: 'CFOP', w: w * 0.045, align: 'center' },
+        { label: 'UN', w: w * 0.025, align: 'center' },
+        { label: 'QUANTIDADE', w: w * 0.065, align: 'right' },
+        { label: 'V.UNITÁRIO', w: w * 0.065, align: 'right' },
+        { label: 'V. TOTAL', w: w * 0.065, align: 'right' },
+        { label: 'BC. ICMS', w: w * 0.065, align: 'right' },
+        { label: 'V.ICMS', w: w * 0.055, align: 'right' },
+        { label: 'V. IPI', w: w * 0.055, align: 'right' },
         { label: 'ALÍQ. ICMS', w: w * 0.06, align: 'right' },
         { label: 'ALÍQ. IPI', w: w * 0.06, align: 'right' },
       ];
