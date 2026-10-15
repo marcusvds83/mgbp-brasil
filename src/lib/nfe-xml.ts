@@ -319,8 +319,6 @@ function gerarImpostos(p: ProdutoData): string {
         `<vBC>${formatNum(vBC, 2)}</vBC>` +
         `<pICMS>${formatNum(pICMS, 4)}</pICMS>` +
         `<vICMS>${formatNum(vICMS, 2)}</vICMS>` +
-        `<pFCP>0.0000</pFCP>` +
-        `<vFCP>0.00</vFCP>` +
         `</ICMS00></ICMS>`;
     }
   } else {
@@ -526,7 +524,6 @@ export function gerarXmlNFe(data: NFeData): string {
     `<vBC>${formatNum(vProd, 2)}</vBC>` +
     `<vICMS>${formatNum(vICMS, 2)}</vICMS>` +
     `<vICMSDeson>0.00</vICMSDeson>` +
-    `<vFCP>0.00</vFCP>` +
     `<vBCST>0.00</vBCST>` +
     `<vST>0.00</vST>` +
     `<vFCPST>0.00</vFCPST>` +
