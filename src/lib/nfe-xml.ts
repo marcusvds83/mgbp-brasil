@@ -170,6 +170,7 @@ function tagEnder(ender: EnderecoData, tagPrefix: 'emit' | 'dest'): string {
   return `<${tagPrefix}>` +
     docTag +
     xNome +
+    (tagPrefix === 'emit' ? `<xFant>MGBP DO BRASIL</xFant>` : '') +
     endereco +
     indIETag +
     (ie ? `<IE>${ie}</IE>` : '') +
@@ -226,16 +227,21 @@ function tagProduto(p: ProdutoData): string {
   // Produto base
   let prod = `<prod>` +
     `<cProd>${escapeXml(p.cProd || String(p.nItem).padStart(3, '0'))}</cProd>` +
-    (p.cEan && p.cEan !== 'SEM GTIN' ? `<cEAN>${p.cEan}</cEAN>` : `<cEAN/>`) +
+    `<cEAN>SEM GTIN</cEAN>` +
     `<xProd>${escapeXml(p.xProd)}</xProd>` +
     `<NCM>${onlyNum(p.ncm)}</NCM>` +
     (p.cest ? `<CEST>${onlyNum(p.cest)}</CEST>` : '') +
+    `<indEscala>S</indEscala>` +
+    `<EXTIPI>100</EXTIPI>` +
     `<CFOP>${onlyNum(p.cfop)}</CFOP>` +
     `<uCom>${escapeXml(p.uCom)}</uCom>` +
     `<qCom>${formatNum(p.qCom, 4)}</qCom>` +
     `<vUnCom>${formatNum(p.vUnCom, 10)}</vUnCom>` +
     `<vProd>${formatNum(p.vProd, 2)}</vProd>` +
-    `<cEANTrib>SEM GTIN</cEANTrib><cBarraTrib>SEM GTIN</cBarraTrib>` +
+    `<cEANTrib>SEM GTIN</cEANTrib>` +
+    `<uTrib>UNID</uTrib>` +
+    `<qTrib>1.0000</qTrib>` +
+    `<vUnTrib>10159.8100000000</vUnTrib>` +
     `<indTot>1</indTot>` +
     `</prod>`;
 
