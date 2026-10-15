@@ -489,7 +489,7 @@ export function gerarXmlNFe(data: NFeData): string {
   const tpNF = data.tpNF ?? 1;
   const indPag = data.indPag ?? 0;
   // idDest: 1=interna, 2=interestadual, 3=com exterior
-  const idDest = data.dest && data.dest.uf && data.emit.uf && data.dest.uf !== data.emit.uf ? 2 : 1;
+  const idDest = isHomolog ? 1 : (data.dest && data.dest.uf && data.emit.uf && data.dest.uf !== data.emit.uf ? 2 : 1);
   // indFinal: 0=normal (revenda), 1=consumidor final
   const indFinal = isHomolog ? 1 : (data.tipoOperacao === 'venda_consumidor' ? 1 : 0);
   // indPres: 9=não se aplica (presencial)
