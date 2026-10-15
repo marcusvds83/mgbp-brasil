@@ -611,10 +611,10 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
     await executeKw('mail.message', 'create', [{
       model: 'account.move',
       res_id: moveId,
-      body: 'NF-e AUTORIZADA na SEFAZ\n' +
-            'Chave: ' + resultado.chave + '\n' +
-            'Protocolo: ' + resultado.protocolo + '\n' +
-            'cStat: ' + resultado.cStat + ' - ' + resultado.xMotivo + '\n' +
+      body: 'NF-e AUTORIZADA na SEFAZ <br>\n' +
+            'Chave: ' + resultado.chave + ' <br>\n' +
+            'Protocolo: ' + resultado.protocolo + ' <br>\n' +
+            'cStat: ' + resultado.cStat + ' - ' + resultado.xMotivo + ' <br>\n' +
             'Data: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
       message_type: 'comment',
     }]);
@@ -651,8 +651,8 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
         await executeKw('mail.message', 'create', [{
           model: 'account.move',
           res_id: moveId,
-          body: 'AVISO: NF-e AUTORIZADA mas houve falha ao gerar o DANFE.\n' +
-                'Erro: ' + (e as Error).message + '\n' +
+          body: 'AVISO: NF-e AUTORIZADA mas houve falha ao gerar o DANFE. <br>\n' +
+                'Erro: ' + (e as Error).message + ' <br>\n' +
                 'XML NF-e foi anexado. O DANFE pode ser baixado posteriormente.',
           message_type: 'comment',
         }]);
@@ -691,8 +691,8 @@ async function safeUpdateError(moveId: number, errMsg: string) {
     await executeKw('mail.message', 'create', [{
       model: 'account.move',
       res_id: moveId,
-      body: 'ERRO na Emissão de NF-e\n' +
-            'Data: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + '\n' +
+      body: 'ERRO na Emissão de NF-e <br>\n' +
+            'Data: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + ' <br>\n' +
             'Detalhe: ' + errMsg.substring(0, 800),
       message_type: 'comment',
     }]);

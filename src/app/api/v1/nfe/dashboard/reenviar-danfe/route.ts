@@ -286,9 +286,9 @@ async function reenviarDanfe(moveId: number) {
     await executeKw('mail.message', 'create', [{
       model: 'account.move',
       res_id: moveId,
-      body: 'DANFE re-enviado para o Odoo\n' +
-            'Data: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + '\n' +
-            'Tamanho: ' + pdfBuf.length + ' bytes\n' +
+      body: 'DANFE re-enviado para o Odoo <br>\n' +
+            'Data: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + ' <br>\n' +
+            'Tamanho: ' + pdfBuf.length + ' bytes <br>\n' +
             'Anexo: ' + anexoNome,
       message_type: 'comment',
       attachment_ids: [[6, 0, [attachmentId]]],

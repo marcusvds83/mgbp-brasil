@@ -189,9 +189,9 @@ export async function POST(req: NextRequest) {
         await create('mail.message', {
           model: 'account.move',
           res_id: move_id,
-          body: 'NF-e CANCELADA na SEFAZ\n' +
-                'Data: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + '\n' +
-                'Justificativa: ' + just + '\n' +
+          body: 'NF-e CANCELADA na SEFAZ <br>\n' +
+                'Data: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + ' <br>\n' +
+                'Justificativa: ' + just + ' <br>\n' +
                 'cStat: ' + cStat + ' - ' + xMotivo,
           message_type: 'comment',
         });

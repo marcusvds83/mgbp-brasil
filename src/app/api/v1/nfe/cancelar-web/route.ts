@@ -213,10 +213,10 @@ export async function GET(req: NextRequest) {
         await create('mail.message', {
           model: 'account.move',
           res_id: moveId,
-          body: 'NF-e CANCELADA na SEFAZ\n' +
-                'Data: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + '\n' +
-                'Justificativa: ' + justificativa + '\n' +
-                'cStat: ' + cStat + ' - ' + xMotivo + '\n' +
+          body: 'NF-e CANCELADA na SEFAZ <br>\n' +
+                'Data: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + ' <br>\n' +
+                'Justificativa: ' + justificativa + ' <br>\n' +
+                'cStat: ' + cStat + ' - ' + xMotivo + ' <br>\n' +
                 'Protocolo cancelamento: ' + (nProtCancel || '-'),
           message_type: 'comment',
         });
@@ -245,9 +245,9 @@ export async function GET(req: NextRequest) {
       await create('mail.message', {
         model: 'account.move',
         res_id: moveId,
-        body: 'ERRO no Cancelamento de NF-e\n' +
-              'Data: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + '\n' +
-              'cStat: ' + cStat + '\n' +
+        body: 'ERRO no Cancelamento de NF-e <br>\n' +
+              'Data: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + ' <br>\n' +
+              'cStat: ' + cStat + ' <br>\n' +
               'Detalhe: ' + xMotivo,
         message_type: 'comment',
       });

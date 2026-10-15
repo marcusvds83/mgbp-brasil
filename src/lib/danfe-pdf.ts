@@ -283,21 +283,26 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
       // === Coluna centro: DANFE + 0/1 + Nº + SÉRIE + FOLHA ===
       const cx = MARGIN + col2A + 2;
       doc.font(FONT_BOLD).fontSize(14);
-      doc.text('DANFE', cx, y + 4, { width: col2B - 4, align: 'center' });
+      doc.text('DANFE', cx, y + 4, { width: col2B - 4, align: 'center', lineBreak: false });
       doc.font(FONT_BOLD).fontSize(6);
-      doc.text('DOCUMENTO AUXILIAR DA', cx, y + 22, { width: col2B - 4, align: 'center' });
-      doc.text('NOTA FISCAL ELETRÔNICA', cx, y + 28, { width: col2B - 4, align: 'center' });
+      doc.text('DOCUMENTO AUXILIAR DA', cx, y + 22, { width: col2B - 4, align: 'center', lineBreak: false });
+      doc.text('NOTA FISCAL ELETRÔNICA', cx, y + 28, { width: col2B - 4, align: 'center', lineBreak: false });
 
-      // 0-ENTRADA / 1-SAÍDA com X
+      // 0-ENTRADA / 1-SAÍDA com X marcando a opção correta
       const tpNF = String(data.tpNF || '1');
+      // Desenha 'X' dentro de cada opção (vazio para não selecionada)
       doc.font(FONT_REG).fontSize(6);
-      doc.text('0-ENTRADA', cx, y + 40, { width: col2B - 4, height: 6 });
-      doc.text('1-SAÍDA', cx, y + 48, { width: col2B - 4, height: 6 });
-      // Marca X
-      doc.font(FONT_BOLD).fontSize(10);
-      const tpX = tpNF === '0' ? cx : cx;
-      const tpY = tpNF === '0' ? y + 40 : y + 48;
-      doc.text('X', tpX, tpY, { width: 10, align: 'left' });
+      // Opção 0 (Entrada)
+      doc.text('[ ]', cx + 4, y + 40, { width: 12, lineBreak: false });
+      doc.text('0-ENTRADA', cx + 16, y + 40, { width: col2B - 20, lineBreak: false });
+      // Opção 1 (Saída)
+      doc.text('[ ]', cx + 4, y + 48, { width: 12, lineBreak: false });
+      doc.text('1-SAÍDA', cx + 16, y + 48, { width: col2B - 20, lineBreak: false });
+      // Marca X dentro da opção selecionada
+      doc.font(FONT_BOLD).fontSize(7);
+      const selX = cx + 5;
+      const selY = tpNF === '0' ? y + 41 : y + 49;
+      doc.text('X', selX, selY, { width: 10, lineBreak: false });
 
       // === Coluna direita: CHAVE ACESSO + barcode + consulta ===
       const dx = MARGIN + col2A + col2B + 2;
@@ -586,46 +591,50 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
       const h10 = 80;
       doc.rect(MARGIN, y, w, h10).stroke(BORDER);
       doc.font(FONT_BOLD).fontSize(6);
-      doc.text('DADOS DOS PRODUTOS / SERVIÇOS', MARGIN + 2, y + 1, { width: w - 4, height: 7 });
+      doc.text('DADOS DOS PRODUTOS / SERVIÇOS', MARGIN + 2, y + 1, { width: w - 4, height: 7, lineBreak: false });
 
-      // Cabeçalho da tabela (7 pts)
+      // Cabeçalho da tabela (12 pts) - altura maior para labels quebrarem em 2 linhas
       const y10h = y + 8;
       hDivider(MARGIN, y10h, w);
 
       // Colunas: CÓD | DESC | NCM | CST | CFOP | UN | QTD | V.UNIT | V.TOT | BC.ICMS | V.ICMS | V.IPI | ALIQ.ICMS | ALIQ.IPI
+      // alinhamento: código/descrição = left, outros = right, CST/CFOP/UN = center
       const cols10 = [
-        { label: 'CÓD. PROD', w: w * 0.09 },
-        { label: 'DESCRIÇÃO DOS PRODUTOS / SERVIÇOS', w: w * 0.27 },
-        { label: 'NCM/SH', w: w * 0.06 },
-        { label: 'CST', w: w * 0.04 },
-        { label: 'CFOP', w: w * 0.05 },
-        { label: 'UN', w: w * 0.03 },
-        { label: 'QUANTIDADE', w: w * 0.07 },
-        { label: 'V.UNITÁRIO', w: w * 0.07 },
-        { label: 'V. TOTAL', w: w * 0.07 },
-        { label: 'BC. ICMS', w: w * 0.07 },
-        { label: 'V.ICMS', w: w * 0.06 },
-        { label: 'V. IPI', w: w * 0.06 },
-        { label: 'ALIQ. ICMS', w: w * 0.06 },
-        { label: 'ALIQ. IPI', w: w * 0.06 },
+        { label: 'CÓD. PROD', w: w * 0.09, align: 'left' },
+        { label: 'DESCRIÇÃO DOS PRODUTOS / SERVIÇOS', w: w * 0.27, align: 'left' },
+        { label: 'NCM/SH', w: w * 0.06, align: 'right' },
+        { label: 'CST', w: w * 0.04, align: 'center' },
+        { label: 'CFOP', w: w * 0.05, align: 'center' },
+        { label: 'UN', w: w * 0.03, align: 'center' },
+        { label: 'QUANTIDADE', w: w * 0.07, align: 'right' },
+        { label: 'V.UNITÁRIO', w: w * 0.07, align: 'right' },
+        { label: 'V. TOTAL', w: w * 0.07, align: 'right' },
+        { label: 'BC. ICMS', w: w * 0.07, align: 'right' },
+        { label: 'V.ICMS', w: w * 0.06, align: 'right' },
+        { label: 'V. IPI', w: w * 0.06, align: 'right' },
+        { label: 'ALÍQ. ICMS', w: w * 0.06, align: 'right' },
+        { label: 'ALÍQ. IPI', w: w * 0.06, align: 'right' },
       ];
 
+      // Desenha bordas verticais + labels do cabeçalho (com quebra de linha natural)
       let xpos: number = MARGIN;
       const col10Xs: number[] = [xpos];
       cols10.forEach((c) => {
         if (col10Xs.length > 1) {
+          // Linha vertical do cabeçalho até fim do bloco
           doc.moveTo(xpos, y10h).lineTo(xpos, y + h10).stroke(BORDER);
         }
-        doc.font(FONT_BOLD).fontSize(4.5);
-        doc.text(c.label, xpos + 1, y10h + 1, { width: c.w - 2, height: 14 });
+        doc.font(FONT_BOLD).fontSize(4);
+        doc.text(c.label, xpos + 1, y10h + 1, { width: c.w - 2, height: 10, align: c.align as any, lineBreak: true });
         col10Xs.push(xpos + c.w);
         xpos += c.w;
       });
 
-      // Itens
-      let yItem = y10h + 14;
+      // Itens - cada item ocupa 18 pts (2 linhas para descrição longa)
+      let yItem = y10h + 12;
       const maxItemY = y + h10 - 3;
-      for (let i = 0; i < data.produtos.length && yItem < maxItemY; i++) {
+      const itemH = 18;
+      for (let i = 0; i < data.produtos.length && yItem + itemH <= maxItemY + 3; i++) {
         const p = data.produtos[i];
         const rowVals = [
           p.codProd, p.descricao, p.ncm, p.cst, p.cfop, p.unidade,
@@ -637,18 +646,20 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
         for (let j = 0; j < cols10.length; j++) {
           const cx = col10Xs[j];
           const cw = cols10[j].w;
+          const al = cols10[j].align as any;
           doc.font(FONT_REG).fontSize(5);
           const isDesc = j === 1;
-          // Descrição: multiline, outras cells: 1 linha
           if (isDesc) {
-            doc.text(rowVals[j], cx + 1, yItem, { width: cw - 2, height: 14 });
+            // Descrição: multiline até 14 pts de altura
+            doc.text(rowVals[j], cx + 1, yItem, { width: cw - 2, height: itemH - 2, align: 'left' });
           } else {
-            doc.text(rowVals[j], cx + 1, yItem, { width: cw - 2, height: 6 });
+            // Outras colunas: 1 linha, alinhamento conforme coluna
+            doc.text(rowVals[j], cx + 1, yItem, { width: cw - 2, height: 6, align: al, lineBreak: false });
           }
         }
-        yItem += 14;
-        // Linha divisória entre itens
-        if (i < data.produtos.length - 1) {
+        yItem += itemH;
+        // Linha horizontal divisória entre itens (até final do bloco)
+        if (yItem < y + h10) {
           hDivider(MARGIN, yItem, w);
         }
       }
@@ -674,12 +685,12 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
       y += h11;
 
       // ============================================================
-      // RODAPÉ
+      // RODAPÉ (logo após o último bloco, evita overflow p/ 2ª página)
       // ============================================================
       doc.font(FONT_REG).fontSize(5);
       doc.text(
         `DANFE gerado por MGBP NF-e Middleware em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
-        MARGIN, PAGE_H - 10, { width: w, align: 'center' }
+        MARGIN, y + 2, { width: w, align: 'center', lineBreak: false }
       );
 
       doc.end();
