@@ -524,6 +524,7 @@ export function gerarXmlNFe(data: NFeData): string {
     `<vBC>${formatNum(vProd, 2)}</vBC>` +
     `<vICMS>${formatNum(vICMS, 2)}</vICMS>` +
     `<vICMSDeson>0.00</vICMSDeson>` +
+    `<vFCP>0.00</vFCP>` +
     `<vBCST>0.00</vBCST>` +
     `<vST>0.00</vST>` +
     `<vFCPST>0.00</vFCPST>` +
