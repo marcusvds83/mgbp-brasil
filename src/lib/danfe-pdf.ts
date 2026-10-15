@@ -128,15 +128,49 @@ const FONT_REG = 'Helvetica';
 /** Gera o PDF DANFE em Buffer - layout compacto em 1 página. */
 export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
   const logoData = await carregarLogo();
+
+  // Pré-gera o barcode Code128 da chave de acesso (bwipjs.toBuffer é async
+  // em versões recentes da lib - se chamado dentro do PDFDocument constructor,
+  // retorna Promise em vez de Buffer e quebra o doc.image()).
+  let barcodeBuffer: Buffer | null = null;
+  try {
+    const bwipBuf = await bwipjs.toBuffer({
+      bcid: 'code128',
+      text: String(data.chave || ''),
+      scale: 1.5,
+      height: 28,
+      includetext: false,
+    });
+    // bwipjs pode retornar Buffer (v4 antigo) ou Promise<Buffer> (v4 novo)
+    barcodeBuffer = Buffer.isBuffer(bwipBuf) ? bwipBuf : Buffer.from(bwipBuf as any);
+  } catch (e) {
+    console.warn('[DANFE-PDF] Falha barcode:', (e as Error).message);
+  }
+
+  // Limpa tags HTML do infCpl (chega como "<p>Termos...</p>" ou similar)
+  const infCplLimpo = (data.infCpl || '')
+    .replace(/<p[^>]*>/g, '')
+    .replace(/<\/p>/g, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .trim();
+  const infCplFiscoLimpo = (data.infCplFisco || '')
+    .replace(/<p[^>]*>/g, '')
+    .replace(/<\/p>/g, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .trim();
+  const dataLimpa: DanfeData = { ...data, infCpl: infCplLimpo, infCplFisco: infCplFiscoLimpo };
+
   return new Promise<Buffer>((resolve, reject) => {
     try {
       const doc = new PDFDocument({
         size: [PAGE_W, PAGE_H],
         margin: MARGIN,
         info: {
-          Title: `DANFE ${data.nNF}/${data.serie}`,
+          Title: `DANFE ${dataLimpa.nNF}/${dataLimpa.serie}`,
           Author: 'MGBP NF-e Middleware',
-          Subject: `DANFE NF-e ${data.chave}`,
+          Subject: `DANFE NF-e ${dataLimpa.chave}`,
         },
       });
       const chunks: Buffer[] = [];
@@ -315,19 +349,14 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
       doc.font(FONT_BOLD).fontSize(7);
       doc.text(chaveFmt, dx, y + 9, { width: dw, height: 8, align: 'center' });
 
-      // Barcode
-      try {
-        const png = bwipjs.toBuffer({
-          bcid: 'code128',
-          text: String(data.chave || ''),
-          scale: 1.5,
-          height: 28,
-          includetext: false,
-        });
-        const barW = Math.min(220, dw);
-        doc.image(png, dx + (dw - barW) / 2, y + 20, { width: barW, height: 28 });
-      } catch (e) {
-        console.warn('[DANFE-PDF] Falha barcode:', (e as Error).message);
+      // Barcode (pré-gerado antes do Promise para funcionar com bwipjs async)
+      if (barcodeBuffer) {
+        try {
+          const barW = Math.min(220, dw);
+          doc.image(barcodeBuffer, dx + (dw - barW) / 2, y + 20, { width: barW, height: 28 });
+        } catch (e) {
+          console.warn('[DANFE-PDF] Falha ao inserir barcode no PDF:', (e as Error).message);
+        }
       }
 
       // Mensagem consulta autenticidade
@@ -631,10 +660,10 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
         xpos += c.w;
       });
 
-      // Itens - cada item ocupa 18 pts (2 linhas para descrição longa)
+      // Itens - cada item ocupa 22 pts (descrição multiline mais alta)
       let yItem = y10h + 12;
       const maxItemY = y + h10 - 3;
-      const itemH = 18;
+      const itemH = 22;
       for (let i = 0; i < data.produtos.length && yItem + itemH <= maxItemY + 3; i++) {
         const p = data.produtos[i];
         const rowVals = [
@@ -680,8 +709,8 @@ export async function gerarPdfDanfe(data: DanfeData): Promise<Buffer> {
       const w11a = w * 0.65, w11b = w - w11a;
       doc.moveTo(MARGIN + w11a, y11l1).lineTo(MARGIN + w11a, y + h11).stroke(BORDER);
 
-      drawCell(MARGIN, y11l1, w11a, h11 - 8, 'INFORMAÇÕES COMPLEMENTARES', data.infCpl || '', { valSize: 5, multiline: true });
-      drawCell(MARGIN + w11a, y11l1, w11b, h11 - 8, 'RESERVADO AO FISCO', data.infCplFisco || '', { valSize: 5, multiline: true });
+      drawCell(MARGIN, y11l1, w11a, h11 - 8, 'INFORMAÇÕES COMPLEMENTARES', dataLimpa.infCpl || '', { valSize: 5, multiline: true });
+      drawCell(MARGIN + w11a, y11l1, w11b, h11 - 8, 'RESERVADO AO FISCO', dataLimpa.infCplFisco || '', { valSize: 5, multiline: true });
 
       y += h11;
 
