@@ -361,15 +361,17 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
   );
 
   // 8. Leitura das linhas
-  const allLines = await read<LineData & Record<string, unknown>>('account.move.line', move.invoice_line_ids, [
+  const camposLinhaDesejados = [
     'name', 'quantity', 'price_unit', 'price_subtotal', 'product_id', 'tax_ids', 'display_type',
-    // Número de série do produto vendido (MGBP)
     'x_mgbp_numero_serie',
     'x_mgbp_cfop',
     'x_mgbp_ncm',
     'x_mgbp_descricao_nfe',
     'x_mgbp_unidade_medida',
-  ]);
+  ];
+  const camposLinha = await filtrarCamposExistentes('account.move.line', camposLinhaDesejados);
+  const allLines = await read<LineData & Record<string, unknown>>('account.move.line', move.invoice_line_ids, camposLinha);
+
   const serviceLines = allLines.filter((l) => (!l.display_type || l.display_type === 'product') && l.price_subtotal > 0);
 
   // 9. Leitura dos produtos (com campos MGBP)
