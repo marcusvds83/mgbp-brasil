@@ -136,7 +136,20 @@ function toFirestoreValue(value) {
 
 function fromFirestoreValue(field) {
   if (!field) return null;
-  if (field.stringValue !== undefined) return field.stringValue;
+  if (field.stringValue !== undefined) {
+    // Heurística: se a string parece JSON (começa com { ou [), faz parse automático.
+    // Isso corrige o problema de objetos salvos pelo toFirestoreValue, que os
+    // serializa como JSON string (Firestore REST não tem tipo map direto via esse helper).
+    const s = field.stringValue;
+    if (s && (s.startsWith('{') || s.startsWith('['))) {
+      try {
+        return JSON.parse(s);
+      } catch {
+        return s; // não era JSON válido, retorna como string
+      }
+    }
+    return s;
+  }
   if (field.integerValue !== undefined) return parseInt(field.integerValue, 10);
   if (field.doubleValue !== undefined) return field.doubleValue;
   if (field.booleanValue !== undefined) return field.booleanValue;

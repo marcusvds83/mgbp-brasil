@@ -224,11 +224,22 @@ export async function statusCertificado(): Promise<Record<string, unknown>> {
       return { configurado: false, mensagem: 'Nenhum certificado A1 no Firebase.' };
     }
     const doc = snap || {};
+    // Parse defensivo do campo info: em versões antigas do firebase-rest.ts,
+    // objetos eram salvos como JSON string. Agora o firebase-rest faz parse
+    // automático, mas dados antigos ainda podem estar como string.
+    let info: Record<string, unknown> = {};
+    if (doc.info) {
+      if (typeof doc.info === 'string') {
+        try { info = JSON.parse(doc.info); } catch { /* mantém vazio */ }
+      } else if (typeof doc.info === 'object') {
+        info = doc.info as Record<string, unknown>;
+      }
+    }
     return {
       configurado: true,
       origem: 'firebase',
       uploadEm: doc.uploadEm,
-      ...(doc.info || {}),
+      ...info,
     };
   } catch (e) {
     return { configurado: false, erro: (e as Error).message };

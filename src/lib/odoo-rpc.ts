@@ -250,6 +250,11 @@ export function invalidateUid() {
 /**
  * Cria um ir.attachment e vincula a mail.message no chatter do registro.
  * Retorna o attachment_id criado.
+ *
+ * Compatibilidade Odoo 16/17/18 (campo `datas`) vs Odoo 19/20 (campo `raw`
+ * ou `db_datas`). O campo `datas` foi removido no Odoo 20 - se enviado, o
+ * registro é criado mas o conteúdo é ignorado, gerando anexo com
+ * file_size=0 (vazio).
  */
 export async function uploadAnexo(
   model: string,
@@ -263,14 +268,31 @@ export async function uploadAnexo(
   const base64 = buf.toString('base64');
   console.log(`[ODOO] Criando anexo ${nome} (${Math.round(base64.length * 0.75)} bytes)...`);
 
+  // Detecta o campo binário correto para a versão do Odoo em uso.
+  // Ordem preferida: raw (Odoo 19/20) > db_datas (alternativo Odoo 20) > datas (Odoo <=18).
+  let campoBinario = 'datas'; // fallback antigo
+  try {
+    const camposValidos = await filtrarCamposExistentes('ir.attachment', ['raw', 'db_datas', 'datas']);
+    if (camposValidos.includes('raw')) {
+      campoBinario = 'raw';
+    } else if (camposValidos.includes('db_datas')) {
+      campoBinario = 'db_datas';
+    } else if (camposValidos.includes('datas')) {
+      campoBinario = 'datas';
+    }
+  } catch (e) {
+    console.warn(`[ODOO] Falha ao detectar campo binário de ir.attachment, usando 'datas' (fallback antigo):`, (e as Error).message);
+  }
+  console.log(`[ODOO] Campo binário ir.attachment selecionado: ${campoBinario}`);
+
   const attachmentId = await create('ir.attachment', {
     name: nome,
-    datas: base64,
+    [campoBinario]: base64,
     res_model: model,
     res_id: resId,
     mimetype: mimetype,
   });
-  console.log(`[ODOO] ir.attachment criado: id=${attachmentId}`);
+  console.log(`[ODOO] ir.attachment criado: id=${attachmentId} (campo ${campoBinario}, ${buf.length} bytes)`);
 
   try {
     await create('mail.message', {

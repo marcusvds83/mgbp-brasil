@@ -33,8 +33,10 @@ export async function GET(req: NextRequest) {
   if (firebaseConfigured()) {
     try {
       const admin = await import('firebase-admin');
-      // Limpa apps existentes
-      admin.apps.forEach((app) => app?.delete().catch(() => {}));
+      // Limpa apps existentes (admin.apps pode ser undefined na primeira chamada)
+      if (Array.isArray(admin.apps)) {
+        await Promise.all(admin.apps.map((app) => app?.delete().catch(() => {})));
+      }
       await admin.initializeApp({
         credential: admin.credential.cert({
           projectId: config.firebase.projectId,
