@@ -237,9 +237,9 @@ function tagProduto(p: ProdutoData): string {
     `<vUnCom>${formatNum(p.vUnCom, 10)}</vUnCom>` +
     `<vProd>${formatNum(p.vProd, 2)}</vProd>` +
     `<cEANTrib>SEM GTIN</cEANTrib>` +
-    `<uTrib>UNID</uTrib>` +
-    `<qTrib>1.0000</qTrib>` +
-    `<vUnTrib>10159.8100000000</vUnTrib>` +
+    `<uTrib>${escapeXml(p.uCom)}</uTrib>` +
+    `<qTrib>${formatNum(p.qCom, 4)}</qTrib>` +
+    `<vUnTrib>${formatNum(p.vUnCom, 10)}</vUnTrib>` +
     `<indTot>1</indTot>` +
     `</prod>`;
 
