@@ -767,7 +767,7 @@ function extrairDadosDanfe(
       fone: nfeData.emit.fone,
     },
     dest: nfeData.dest ? {
-      nome: nfeData.dest.xName || '',
+      nome: nfeData.dest.xNome || '',
       cnpj: nfeData.dest.cnpj,
       cpf: nfeData.dest.cpf,
       endereco: nfeData.dest.xLgr,
