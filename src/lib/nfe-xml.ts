@@ -542,6 +542,7 @@ export function gerarXmlNFe(data: NFeData): string {
     `<vCOFINS>${formatNum(vCOFINS, 2)}</vCOFINS>` +
     `<vOutro>${formatNum(data.vOutro || 0, 2)}</vOutro>` +
     `<vNF>${formatNum(vNF, 2)}</vNF>` +
+    `<vTotTrib>${formatNum(data.produtos.reduce((s, p) => s + ((p.vProd || 0) * 0.19), 0), 2)}</vTotTrib>` +
     `</ICMSTot>` +
     `</total>`;
 
