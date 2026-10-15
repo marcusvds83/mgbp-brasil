@@ -107,17 +107,27 @@ export async function agentAsync(): Promise<https.Agent> {
     }
   }
 
+  // Render (Ubuntu/Node 20) tem CA bundle do sistema que às vezes não inclui
+  // todas as CAs ICP-Brasil necessárias. Para evitar 'self-signed certificate
+  // in certificate chain', quando NFE_TLS_INSECURE=1, desabilitamos
+  // rejectUnauthorized. Default = respeitar verificação TLS.
+  // Importante: mTLS autentica o cliente via cert/key, então a verificação
+  // do servidor é uma camada adicional - não essencial para mTLS funcionar.
+  const tlsInsecure = config.nfe.tlsInsecure || process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0';
+
   const opts: https.AgentOptions = {
     minVersion: 'TLSv1.2',
     keepAlive: true,
-    rejectUnauthorized: !config.nfe.tlsInsecure,
-    ca: extraCas,
+    rejectUnauthorized: !tlsInsecure,
+    // Se tlsInsecure=true, não passar CAs (Node usa bundle do sistema).
+    // Se tlsInsecure=false, passar CAs ICP-Brasil + chain.
+    ...(tlsInsecure ? {} : { ca: extraCas }),
   };
   if (cert.privateKeyPem && cert.chainPem && cert.chainPem.length) {
     opts.key = cert.privateKeyPem;
     opts.cert = cert.chainPem.join('');
     console.log(
-      `[SEFAZ] Agente mTLS criado com PEM (key + cert chain, ${cert.chainPem.length} certificados, ${opts.ca.length} CAs ICP-Brasil).`
+      `[SEFAZ] Agente mTLS criado com PEM (key + cert chain, ${cert.chainPem.length} certificados, tlsInsecure=${tlsInsecure}, ${opts.ca ? opts.ca.length + ' CAs ICP-Brasil' : 'CAs sistema'}).`
     );
   } else if (cert.privateKeyPem && cert.certPem) {
     opts.key = cert.privateKeyPem;
