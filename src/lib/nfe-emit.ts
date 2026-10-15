@@ -411,17 +411,22 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
   const produtos: ProdutoData[] = serviceLines.map((line, idx) => {
     const product = line.product_id ? productMap[line.product_id[0]] : null;
 
-    // CFOP - prioridade: linha > produto > calculado pelo tipo operação
+    // CFOP - prioridade: linha > move (override manual) > calculado (inteligente) > produto (fallback)
+    // IMPORTANTE: cfopDefault deve vir ANTES do product.x_mgbp_cfop porque o cálculo dinâmico
+    // baseado em UF origem/destino + tipo operação é mais confiável que um CFOP hardcoded no
+    // produto (que pode ser '6108' interestadual mas o destino é interno - erro cStat 732 da SEFAZ).
     const cfopDefault = pickCfopMgbp(
       tipoOperacao,
       company._uf,
       partner._uf,
       !!partner._ie
     );
-    const cfop = isHomolog ? '5102' : ((line.x_mgbp_cfop as string) ||
-                 (product?.x_mgbp_cfop as string) ||
-                 (move.x_mgbp_nfe_cfop as string) ||
-                 cfopDefault);
+    const cfop = isHomolog ? '5102' : (
+      (line.x_mgbp_cfop as string) ||
+      (move.x_mgbp_nfe_cfop as string) ||
+      cfopDefault ||
+      (product?.x_mgbp_cfop as string)
+    );
 
     // NCM - linha > produto > config default
     const ncm = (line.x_mgbp_ncm as string) ||
