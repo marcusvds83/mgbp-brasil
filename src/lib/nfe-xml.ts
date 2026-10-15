@@ -231,8 +231,6 @@ function tagProduto(p: ProdutoData): string {
     `<xProd>${escapeXml(p.xProd)}</xProd>` +
     `<NCM>${onlyNum(p.ncm)}</NCM>` +
     (p.cest ? `<CEST>${onlyNum(p.cest)}</CEST>` : '') +
-    `<indEscala>S</indEscala>` +
-    `<EXTIPI>100</EXTIPI>` +
     `<CFOP>${onlyNum(p.cfop)}</CFOP>` +
     `<uCom>${escapeXml(p.uCom)}</uCom>` +
     `<qCom>${formatNum(p.qCom, 4)}</qCom>` +
