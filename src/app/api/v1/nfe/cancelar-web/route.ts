@@ -90,9 +90,11 @@ export async function GET(req: NextRequest) {
     }
     const move = moves[0];
 
-    if (move.x_mgbp_nfe_status !== 'autorizada') {
+    // Permite cancelar NF-e em status 'autorizada' OU 'cancelar_solicitado'
+    // (retry quando tentativa anterior falhou por rede/timeout)
+    if (move.x_mgbp_nfe_status !== 'autorizada' && move.x_mgbp_nfe_status !== 'cancelar_solicitado') {
       return errorRedirect(redirectUrl,
-        `NF-e não pode ser cancelada. Status atual: ${move.x_mgbp_nfe_status || 'vazio'}. Apenas NF-e autorizada pode ser cancelada.`);
+        `NF-e não pode ser cancelada. Status atual: ${move.x_mgbp_nfe_status || 'vazio'}. Apenas NF-e autorizada ou em processo de cancelamento.`);
     }
 
     const chave = move.x_mgbp_nfe_chave;

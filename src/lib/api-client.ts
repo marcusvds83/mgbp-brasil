@@ -159,6 +159,20 @@ export class ApiClient {
     }>('POST', '/api/v1/nfe/dashboard/reenviar-danfe', { move_id: moveId });
   }
 
+  /** Re-anexa o XML NF-e (nfeProc completo) no chatter da invoice. */
+  reenviarXml(moveId: number) {
+    return this.json<{
+      sucesso: boolean;
+      move_id: number;
+      chave?: string;
+      anexo_nome?: string;
+      anexo_id?: number;
+      tamanho_bytes?: number;
+      mensagem?: string;
+      erro?: string;
+    }>('POST', '/api/v1/nfe/dashboard/reenviar-xml', { move_id: moveId });
+  }
+
   /** Consulta a situação da NF-e na SEFAZ (NFeConsultaProtocolo4). */
   consultarSefaz(moveId: number) {
     return this.json<{

@@ -59,10 +59,12 @@ export async function POST(req: NextRequest) {
     }
     const move = moves[0] as any;
 
-    if (move.x_mgbp_nfe_status !== 'autorizada') {
+    // Permite cancelar NF-e em status 'autorizada' OU 'cancelar_solicitado'
+    // (esta última = retry quando uma tentativa anterior falhou por rede/timeout)
+    if (move.x_mgbp_nfe_status !== 'autorizada' && move.x_mgbp_nfe_status !== 'cancelar_solicitado') {
       return NextResponse.json({
         sucesso: false,
-        xMotivo: `NF-e precisa estar autorizada. Status atual: ${move.x_mgbp_nfe_status || 'vazio'}`,
+        xMotivo: `NF-e precisa estar autorizada ou em processo de cancelamento. Status atual: ${move.x_mgbp_nfe_status || 'vazio'}`,
       });
     }
 

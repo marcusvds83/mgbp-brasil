@@ -217,6 +217,25 @@ function NfListTable({ nfs, onRefresh }: { nfs: NfItem[]; onRefresh: () => void 
     }
   }
 
+  async function handleReenviarXml(moveId: number) {
+    setLoading(moveId);
+    try {
+      const r = await client.reenviarXml(moveId);
+      if (r.sucesso) {
+        toast({
+          title: "XML re-enviado!",
+          description: `${r.anexo_nome} (${r.tamanho_bytes} bytes) anexado no chatter da invoice no Odoo.`,
+        });
+      } else {
+        toast({ title: "Falha ao re-enviar XML", description: r.erro, variant: "destructive" });
+      }
+    } catch (e) {
+      toast({ title: "Erro", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setLoading(null);
+    }
+  }
+
   async function handleConsultarSefaz(moveId: number) {
     setLoading(moveId);
     try {
@@ -332,6 +351,15 @@ function NfListTable({ nfs, onRefresh }: { nfs: NfItem[]; onRefresh: () => void 
                             <Download className="w-3.5 h-3.5" />
                           </Button>
                         </a>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleReenviarXml(nf.id)}
+                          disabled={loading === nf.id}
+                          title="Re-enviar XML NF-e (nfeProc completo) para o Odoo"
+                        >
+                          <FileText className={`w-3.5 h-3.5 ${loading === nf.id ? "animate-spin" : ""}`} />
+                        </Button>
                         <Button
                           size="sm"
                           variant="ghost"
