@@ -146,7 +146,7 @@ function tagEnder(ender: EnderecoData, tagPrefix: 'emit' | 'dest'): string {
     `<xLgr>${street || 'NAO INFORMADO'}</xLgr>` +
     `<nro>${number || 'S/N'}</nro>` +
     (ender.xCpl ? `<xCpl>${ender.xCpl}</xCpl>` : '') +
-    (ender.xBairro ? `<xBairro>${ender.xBairro}</xBairro>` : '') +
+    `<xBairro>${ender.xBairro || 'Sem Bairro'}</xBairro>` +
     `<cMun>${ender.cMun || '9999999'}</cMun>` +
     `<xMun>${ender.xMun || 'EXTERIOR'}</xMun>` +
     `<UF>${ender.uf || 'EX'}</UF>` +
@@ -160,17 +160,24 @@ function tagEnder(ender: EnderecoData, tagPrefix: 'emit' | 'dest'): string {
     ? `<xNome>${escapeXml(ender.xNome)}</xNome>`
     : '';
 
+  const crtTag = tagPrefix === 'emit'
+    ? `<CRT>${config.mgbp.regimeTributario === 'simples_nacional' ? '1' : config.mgbp.regimeTributario === 'lucro_presumido' ? '2' : '3'}</CRT>`
+    : '';
+  const emailTag = tagPrefix === 'dest' && ender.email
+    ? `<email>${escapeXml(ender.email)}</email>`
+    : '';
+
   return `<${tagPrefix}>` +
     docTag +
     xNome +
+    endereco +
     indIETag +
     (ie ? `<IE>${ie}</IE>` : '') +
     (ender.iest ? `<IEST>${onlyNum(ender.iest)}</IEST>` : '') +
     im +
-    endereco +
-    (ender.email ? `<email>${escapeXml(ender.email)}</email>` : '') +
+    crtTag +
+    emailTag +
     `</${tagPrefix}>`;
-}
 
 // ============================================================
 // Tags de produto (det + prod + impostos)
