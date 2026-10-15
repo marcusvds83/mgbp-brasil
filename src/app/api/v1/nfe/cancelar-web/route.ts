@@ -219,7 +219,6 @@ export async function GET(req: NextRequest) {
                 'cStat: ' + cStat + ' - ' + xMotivo + '\n' +
                 'Protocolo cancelamento: ' + (nProtCancel || '-'),
           message_type: 'comment',
-          subtype_xmlid: 'mail.mt_comment',
         });
       } catch (e) {
         console.warn('[NFE-CANCEL-WEB] Falha ao postar no chatter:', (e as Error).message);
@@ -251,7 +250,6 @@ export async function GET(req: NextRequest) {
               'cStat: ' + cStat + '\n' +
               'Detalhe: ' + xMotivo,
         message_type: 'comment',
-        subtype_xmlid: 'mail.mt_comment',
       });
     } catch (e) {
       console.warn('[NFE-CANCEL-WEB] Falha ao postar erro no chatter:', (e as Error).message);

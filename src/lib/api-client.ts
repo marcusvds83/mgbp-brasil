@@ -141,6 +141,40 @@ export class ApiClient {
   downloadPdf(moveId: number) {
     return `${this.baseUrl}/api/v1/nfe/dashboard/${moveId}/pdf?api_key=${encodeURIComponent(this.apiKey)}`;
   }
+
+  // === Ações em NF-e autorizada ===
+
+  /** Re-gera o DANFE com layout atualizado e anexa no chatter da invoice. */
+  reenviarDanfe(moveId: number) {
+    return this.json<{
+      sucesso: boolean;
+      move_id: number;
+      chave?: string;
+      nNF?: string;
+      anexo_nome?: string;
+      anexo_id?: number;
+      tamanho_bytes?: number;
+      mensagem?: string;
+      erro?: string;
+    }>('POST', '/api/v1/nfe/dashboard/reenviar-danfe', { move_id: moveId });
+  }
+
+  /** Consulta a situação da NF-e na SEFAZ (NFeConsultaProtocolo4). */
+  consultarSefaz(moveId: number) {
+    return this.json<{
+      sucesso: boolean;
+      chave?: string;
+      cStat?: string;
+      xMotivo?: string;
+      situacao?: string;
+      nProt?: string;
+      dhRecBto?: string;
+      chNFe?: string;
+      ambiente?: string;
+      uf?: string;
+      erro?: string;
+    }>('GET', `/api/v1/nfe/dashboard/consulta-sefaz?move_id=${moveId}`);
+  }
 }
 
 export interface NfItem {

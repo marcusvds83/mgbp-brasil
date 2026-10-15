@@ -617,7 +617,6 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
             'cStat: ' + resultado.cStat + ' - ' + resultado.xMotivo + '\n' +
             'Data: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
       message_type: 'comment',
-      subtype_xmlid: 'mail.mt_comment',
     }]);
 
       // Anexa XML no chatter
@@ -656,7 +655,6 @@ export async function emitirNfeOdoo(moveId: number): Promise<EmissionResult> {
                 'Erro: ' + (e as Error).message + '\n' +
                 'XML NF-e foi anexado. O DANFE pode ser baixado posteriormente.',
           message_type: 'comment',
-          subtype_xmlid: 'mail.mt_comment',
         }]);
       } catch {}
     }
@@ -697,7 +695,6 @@ async function safeUpdateError(moveId: number, errMsg: string) {
             'Data: ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + '\n' +
             'Detalhe: ' + errMsg.substring(0, 800),
       message_type: 'comment',
-      subtype_xmlid: 'mail.mt_comment',
     }]);
   } catch (e) {
     console.error('[NFE-EMIT] Falha ao registrar erro:', (e as Error).message);

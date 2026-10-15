@@ -194,7 +194,6 @@ export async function POST(req: NextRequest) {
                 'Justificativa: ' + just + '\n' +
                 'cStat: ' + cStat + ' - ' + xMotivo,
           message_type: 'comment',
-          subtype_xmlid: 'mail.mt_comment',
         });
       } catch (e) {
         console.warn('[NFE-CANCEL] Falha ao postar no chatter:', (e as Error).message);

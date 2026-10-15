@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Toaster } from "@/components/ui/toaster";
 import { toast } from "@/hooks/use-toast";
-import { FileText, Download, RefreshCw, LogOut, ShieldCheck, AlertTriangle, CheckCircle2, Clock, XCircle, Settings, BookOpen, Database, Cloud, Server, Key, FileBox, Image } from "lucide-react";
+import { FileText, Download, RefreshCw, LogOut, ShieldCheck, AlertTriangle, CheckCircle2, Clock, XCircle, Settings, BookOpen, Database, Cloud, Server, Key, FileBox, Image, Search } from "lucide-react";
 
 // ============================================================
 // Tela de autenticacao (API Key)
@@ -198,6 +198,44 @@ function NfListTable({ nfs, onRefresh }: { nfs: NfItem[]; onRefresh: () => void 
     }
   }
 
+  async function handleReenviarDanfe(moveId: number) {
+    setLoading(moveId);
+    try {
+      const r = await client.reenviarDanfe(moveId);
+      if (r.sucesso) {
+        toast({
+          title: "DANFE re-enviado!",
+          description: `${r.anexo_nome} (${r.tamanho_bytes} bytes) anexado no chatter da invoice no Odoo.`,
+        });
+      } else {
+        toast({ title: "Falha ao re-enviar DANFE", description: r.erro, variant: "destructive" });
+      }
+    } catch (e) {
+      toast({ title: "Erro", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function handleConsultarSefaz(moveId: number) {
+    setLoading(moveId);
+    try {
+      const r = await client.consultarSefaz(moveId);
+      if (r.sucesso) {
+        toast({
+          title: `NF-e: ${r.situacao}`,
+          description: `cStat: ${r.cStat} - ${r.xMotivo}${r.nProt ? " | Protocolo: " + r.nProt : ""}`,
+        });
+      } else {
+        toast({ title: "Falha na consulta SEFAZ", description: r.erro, variant: "destructive" });
+      }
+    } catch (e) {
+      toast({ title: "Erro", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setLoading(null);
+    }
+  }
+
   function getStatusBadge(status: string) {
     const map: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
       autorizada: { label: "Autorizada", variant: "default" },
@@ -294,6 +332,24 @@ function NfListTable({ nfs, onRefresh }: { nfs: NfItem[]; onRefresh: () => void 
                             <Download className="w-3.5 h-3.5" />
                           </Button>
                         </a>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleReenviarDanfe(nf.id)}
+                          disabled={loading === nf.id}
+                          title="Re-enviar DANFE para o Odoo (substitui anexo antigo)"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${loading === nf.id ? "animate-spin" : ""}`} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleConsultarSefaz(nf.id)}
+                          disabled={loading === nf.id}
+                          title="Consultar situação na SEFAZ"
+                        >
+                          <Search className="w-3.5 h-3.5" />
+                        </Button>
                         <Button
                           size="sm"
                           variant="ghost"
