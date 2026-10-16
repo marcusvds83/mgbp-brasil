@@ -112,6 +112,22 @@ export async function GET(req: NextRequest) {
     // Marca como "cancelar_solicitado" no Odoo (status intermediário)
     await write('account.move', [moveId], { x_mgbp_nfe_status: 'cancelar_solicitado' });
 
+    // Posta mensagem no chatter indicando que o processamento começou
+    // (para o usuário ver que o botão foi clicado e o Render está trabalhando)
+    try {
+      await create('mail.message', {
+        model: 'account.move',
+        res_id: moveId,
+        body: 'Cancelamento de NF-e em processamento<br/>Data: ' +
+              new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + '<br/>' +
+              'Justificativa: ' + justificativa + '<br/>' +
+              'Middleware MGBP NF-e está enviando evento de cancelamento à SEFAZ...',
+        message_type: 'comment',
+      });
+    } catch (e) {
+      console.warn('[NFE-CANCEL-WEB] Falha ao postar mensagem inicial:', (e as Error).message);
+    }
+
     // Monta XML do evento de cancelamento (tpEvento=110111)
     // Id do evento: ID + cOrgao(2) + tpEvento(6) + chNFe(44) = 52 dígitos
     // Pattern oficial XSD NF-e: ID[0-9]{52}
