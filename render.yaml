@@ -6,7 +6,7 @@ services:
     plan: starter
     region: oregon
     buildCommand: npm install --legacy-peer-deps && npm run build
-    startCommand: npm run start
+    startCommand: node start-with-logs.js
     healthCheckPath: /api/v1/health
     autoDeploy: true
     envVars:
@@ -28,6 +28,8 @@ services:
         value: marcus@nytro.com.br
       - key: ODOO_API_KEY
         sync: false
+      - key: POLLING_INTERVAL_MS
+        value: "60000"
       - key: ODOO_POLLING_MS
         value: "20000"
       - key: FIREBASE_PROJECT_ID
