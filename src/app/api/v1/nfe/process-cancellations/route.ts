@@ -68,7 +68,7 @@ async function cancelarNfe(
     // Se der cStat=215 (schema), verificar nos logs se é sobre o Id ou outro elemento.
     const cOrgao = chave.substring(0, 2);
     const nSeqEvento = '1';
-    const idEventoRef = `${cOrgao}110111${chave}`;
+    const idEventoRef = `110111${chave}${nSeqEvento.padStart(2, "0")}`;
     const dhEvento = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().substring(0, 19) + '-03:00';
 
     const eventoXml =
