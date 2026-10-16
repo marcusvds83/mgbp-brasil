@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     // ANTES (errado): ID + cOrgao + 110111 + CNPJ + chave + nSeq = 67 chars (rejeitado cStat 215)
     const cOrgao = chave.substring(0, 2);
     const nSeqEvento = '1';
-    const idEventoRef = `${cOrgao}110111${chave}`;
+    const idEventoRef = `${cOrgao}110111${cert.info.cnpj}${chave}${nSeqEvento}`;
     const dhEvento = new Date().toISOString().substring(0, 19);
 
     const detEvento =
