@@ -181,8 +181,12 @@ export async function POST(req: NextRequest) {
       transformResponse: [(d) => d],
     });
 
-    const cStat = tag(resp.data, 'cStat');
-    const xMotivo = tag(resp.data, 'xMotivo');
+    // Extrai cStat/xMotivo/nProt do EVENTO individual (dentro de <retEvento><infEvento>)
+    // NÃO do lote (que sempre retorna cStat=128 "Lote de Evento Processado")
+    const retEventoMatch = resp.data.match(/<retEvento[\s\S]*?<\/retEvento>/i);
+    const retEventoXml = retEventoMatch ? retEventoMatch[0] : resp.data;
+    const cStat = tag(retEventoXml, "cStat");
+    const xMotivo = tag(retEventoXml, "xMotivo");
 
     // Log completo para debug (vai para o log do Render)
     console.log(`[NFE-CANCEL] SEFAZ: cStat=${cStat} xMotivo=${xMotivo}`);

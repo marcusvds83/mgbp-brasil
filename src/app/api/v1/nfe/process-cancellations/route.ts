@@ -142,9 +142,13 @@ async function cancelarNfe(
       transformResponse: [(d) => d],
     });
 
-    const cStat = tag(resp.data, 'cStat');
-    const xMotivo = tag(resp.data, 'xMotivo');
-    const nProtCancel = tag(resp.data, 'nProt');
+    // Extrai cStat/xMotivo/nProt do EVENTO individual (dentro de <retEvento><infEvento>)
+    // NÃO do lote (que sempre retorna cStat=128 "Lote de Evento Processado")
+    const retEventoMatch = resp.data.match(/<retEvento[\s\S]*?<\/retEvento>/i);
+    const retEventoXml = retEventoMatch ? retEventoMatch[0] : resp.data;
+    const cStat = tag(retEventoXml, 'cStat');
+    const xMotivo = tag(retEventoXml, 'xMotivo');
+    const nProtCancel = tag(retEventoXml, 'nProt');
 
     // LOG DETALHADO da resposta completa da SEFAZ (para debug de cStat=128 etc)
     console.log(`[PROCESS-CANCEL] SEFAZ: cStat=${cStat} xMotivo=${xMotivo}`);
