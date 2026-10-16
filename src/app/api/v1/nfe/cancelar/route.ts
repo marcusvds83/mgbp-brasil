@@ -86,12 +86,13 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Monta XML do evento de cancelamento (tpEvento=110111)
-    // Id do evento: ID + cOrgao(2) + tpEvento(6) + CNPJ_emitente(14) + chNFe(44) + nSeqEvento(1)
-    // Total: 2+6+14+44+1 = 67 dígitos depois de 'ID'
-    // ANTES estava errado: ID + cOrgao + 110111 + chave + idEvento(15) + 01 = 69 chars (rejeitado cStat 215)
+    // Id do evento: ID + cOrgao(2) + tpEvento(6) + chNFe(44) = 52 dígitos
+    // Pattern oficial XSD NF-e: ID[0-9]{52}
+    // O nSeqEvento e CNPJ vão como ELEMENTOS do XML, não no Id.
+    // ANTES (errado): ID + cOrgao + 110111 + CNPJ + chave + nSeq = 67 chars (rejeitado cStat 215)
     const cOrgao = chave.substring(0, 2);
     const nSeqEvento = '1';
-    const idEventoRef = `${cOrgao}110111${cert.info.cnpj}${chave}${nSeqEvento}`;
+    const idEventoRef = `${cOrgao}110111${chave}`;
     const dhEvento = new Date().toISOString().substring(0, 19);
 
     const detEvento =
@@ -182,7 +183,12 @@ export async function POST(req: NextRequest) {
     const cStat = tag(resp.data, 'cStat');
     const xMotivo = tag(resp.data, 'xMotivo');
 
+    // Log completo para debug (vai para o log do Render)
     console.log(`[NFE-CANCEL] SEFAZ: cStat=${cStat} xMotivo=${xMotivo}`);
+    console.log(`[NFE-CANCEL] XML evento enviado (antes assinar): ${eventoXml.substring(0, 1500)}`);
+    console.log(`[NFE-CANCEL] SOAP request: ${bodySoap.substring(0, 800)}`);
+    console.log(`[NFE-CANCEL] SOAP response completa (${resp.data.length} chars): ${resp.data.substring(0, 3000)}`);
+    console.log(`[NFE-CANCEL] Id do infEvento: ID${idEventoRef} (${idEventoRef.length} chars após 'ID')`);
 
     if (cStat === '135' || cStat === '155' || cStat === '144') {
       // Sucesso no cancelamento

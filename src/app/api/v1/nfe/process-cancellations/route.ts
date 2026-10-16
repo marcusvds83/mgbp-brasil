@@ -61,12 +61,13 @@ async function cancelarNfe(
     }
 
     // Monta XML do evento de cancelamento (tpEvento=110111)
-    // Id do evento: ID + cOrgao(2) + tpEvento(6) + CNPJ_emitente(14) + chNFe(44) + nSeqEvento(1)
-    // Total: 2+6+14+44+1 = 67 dígitos depois de 'ID'
-    // ANTES estava errado: ID + cOrgao + 110111 + chave + idEvento(15) + 01 = 69 chars (rejeitado cStat 215)
+    // Id do evento: ID + cOrgao(2) + tpEvento(6) + chNFe(44) = 52 dígitos
+    // Pattern oficial XSD NF-e: ID[0-9]{52}
+    // O nSeqEvento e CNPJ vão como ELEMENTOS do XML, não no Id.
+    // ANTES (errado): ID + cOrgao + 110111 + CNPJ + chave + nSeq = 67 chars (rejeitado cStat 215)
     const cOrgao = chave.substring(0, 2);
     const nSeqEvento = '1';
-    const idEventoRef = `${cOrgao}110111${cert.info.cnpj}${chave}${nSeqEvento}`;
+    const idEventoRef = `${cOrgao}110111${chave}`;
     const dhEvento = new Date().toISOString().substring(0, 19) + '-03:00';
 
     const eventoXml =
