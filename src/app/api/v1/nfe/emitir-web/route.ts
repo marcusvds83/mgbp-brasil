@@ -14,6 +14,17 @@ import { verifyApiKey } from '@/lib/auth';
 import { read, write } from '@/lib/odoo-rpc';
 import { emitirNfeOdoo } from '@/lib/nfe-emit';
 
+/** Redireciona direto para o Odoo (sem mostrar página HTML) com query string indicando resultado. */
+function redirectBack(targetUrl: string, params: { sucesso: boolean; msg?: string }): NextResponse {
+  const qs = new URLSearchParams({
+    nfe_status: params.sucesso ? 'sucesso' : 'erro',
+    nfe_msg: params.msg || '',
+  }).toString();
+  const sep = targetUrl.includes('?') ? '&' : '?';
+  const finalUrl = `${targetUrl}${sep}${qs}`;
+  return NextResponse.redirect(finalUrl, { status: 302 });
+}
+
 /** Página HTML de redirecionamento com mensagem (evita blank screen). */
 function htmlRedirect(targetUrl: string, title: string, body: string, autoRefreshMs = 0): NextResponse {
   const refresh = autoRefreshMs > 0 ? `<meta http-equiv="refresh" content="${Math.ceil(autoRefreshMs / 1000)};url=${targetUrl}">` : '';
@@ -50,6 +61,10 @@ ${refresh}
 
 /** Mensagem de erro padronizada com botão voltar. */
 function errorRedirect(redirectUrl: string, errMsg: string): NextResponse {
+  // Se tem redirect real (chamado via URL action do Odoo), faz 302 redirect direto
+  if (redirectUrl && redirectUrl.startsWith('https://mgbp-brasil.odoo.com/odoo/invoices/')) {
+    return redirectBack(redirectUrl, { sucesso: false, msg: errMsg });
+  }
   const body = `<div class="erro"><b>Erro:</b><br/>${errMsg.replace(/</g, '&lt;')}</div>`;
   return htmlRedirect(redirectUrl, 'Erro na emissão NF-e', body);
 }
@@ -112,15 +127,10 @@ export async function GET(req: NextRequest) {
     console.log(`[NFE-WEB] Resultado move_id=${moveId}: sucesso=${resultado.sucesso} em ${duracao}ms`);
 
     if (resultado.sucesso) {
-      const body = `<div class="ok">
-        <b>NF-e AUTORIZADA com sucesso!</b><br/><br/>
-        <b>Fatura:</b> ${move.name}<br/>
-        <b>Chave:</b> ${resultado.chave || '-'}<br/>
-        <b>Protocolo:</b> ${resultado.protocolo || '-'}<br/>
-        <b>cStat:</b> ${resultado.cStat} - ${resultado.xMotivo}<br/><br/>
-        <span class="progress">Duração: ${(duracao / 1000).toFixed(1)}s</span>
-      </div>`;
-      return htmlRedirect(redirectUrl, 'NF-e autorizada!', body);
+      return redirectBack(redirectUrl, {
+        sucesso: true,
+        msg: `NF-e ${move.name} AUTORIZADA na SEFAZ. cStat: ${resultado.cStat} - ${resultado.xMotivo}. Protocolo: ${resultado.protocolo || '-'}`,
+      });
     }
 
     return errorRedirect(redirectUrl,

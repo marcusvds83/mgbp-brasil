@@ -33,6 +33,17 @@ function tag(xml: string, name: string): string {
   return m ? m[1].trim() : '';
 }
 
+/** Redireciona direto para o Odoo (sem mostrar página HTML) com query string indicando resultado. */
+function redirectBack(targetUrl: string, params: { sucesso: boolean; msg?: string }): NextResponse {
+  const qs = new URLSearchParams({
+    nfe_status: params.sucesso ? 'sucesso' : 'erro',
+    nfe_msg: params.msg || '',
+  }).toString();
+  const sep = targetUrl.includes('?') ? '&' : '?';
+  const finalUrl = `${targetUrl}${sep}${qs}`;
+  return NextResponse.redirect(finalUrl, { status: 302 });
+}
+
 /** Página HTML de redirecionamento (mesmo template do emitir-web). */
 function htmlRedirect(targetUrl: string, title: string, body: string): NextResponse {
   const html = `<!DOCTYPE html>
@@ -65,6 +76,10 @@ function htmlRedirect(targetUrl: string, title: string, body: string): NextRespo
 }
 
 function errorRedirect(redirectUrl: string, errMsg: string): NextResponse {
+  // Se tem redirect real (chamado via URL action do Odoo), faz 302 redirect direto
+  if (redirectUrl && redirectUrl.startsWith('https://mgbp-brasil.odoo.com/odoo/invoices/')) {
+    return redirectBack(redirectUrl, { sucesso: false, msg: errMsg });
+  }
   return htmlRedirect(redirectUrl, 'Erro no Cancelamento NF-e',
     `<div class="erro"><b>Erro:</b><br/>${errMsg.replace(/</g, '&lt;')}</div>`);
 }
@@ -247,14 +262,11 @@ export async function GET(req: NextRequest) {
         console.warn('[NFE-CANCEL-WEB] Falha ao postar no chatter:', (e as Error).message);
       }
 
-      const body = `<div class="ok">
-        <b>NF-e CANCELADA com sucesso na SEFAZ!</b><br/><br/>
-        <b>Fatura:</b> ${move.name}<br/>
-        <b>Chave:</b> ${chave}<br/>
-        <b>cStat:</b> ${cStat} - ${xMotivo}<br/>
-        <b>Protocolo cancelamento:</b> ${nProtCancel || '-'}
-      </div>`;
-      return htmlRedirect(redirectUrl, 'NF-e cancelada!', body);
+      // Redireciona direto de volta para o Odoo (302 redirect, sem HTML)
+      return redirectBack(redirectUrl, {
+        sucesso: true,
+        msg: `NF-e ${move.name} CANCELADA na SEFAZ. cStat: ${cStat} - ${xMotivo}. Protocolo: ${nProtCancel || '-'}`,
+      });
     }
 
     // Falha - reverte status
