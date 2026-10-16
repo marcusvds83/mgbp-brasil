@@ -68,8 +68,8 @@ async function cancelarNfe(
     // Se der cStat=215 (schema), verificar nos logs se é sobre o Id ou outro elemento.
     const cOrgao = chave.substring(0, 2);
     const nSeqEvento = '1';
-    const idEventoRef = `${cOrgao}110111${cert.info.cnpj}${chave}${nSeqEvento}`;
-    const dhEvento = new Date().toISOString().substring(0, 19) + '-03:00';
+    const idEventoRef = `${cOrgao}110111${chave}`;
+    const dhEvento = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().substring(0, 19) + '-03:00';
 
     const eventoXml =
       `<?xml version="1.0" encoding="UTF-8"?>` +
@@ -108,6 +108,7 @@ async function cancelarNfe(
       location: { reference: "//*[local-name(.)='infEvento']", action: 'after' },
     });
     const eventoAssinado = sig.getSignedXml();
+    console.log(`[PROCESS-CANCEL] XML ASSINADO (primeiros 2000 chars): ${eventoAssinado.substring(0, 2000)}`);
 
     // Envia lote
     const idLote = String(Date.now()).slice(-15);

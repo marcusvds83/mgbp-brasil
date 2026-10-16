@@ -92,8 +92,8 @@ export async function POST(req: NextRequest) {
     // ANTES (errado): ID + cOrgao + 110111 + CNPJ + chave + nSeq = 67 chars (rejeitado cStat 215)
     const cOrgao = chave.substring(0, 2);
     const nSeqEvento = '1';
-    const idEventoRef = `${cOrgao}110111${cert.info.cnpj}${chave}${nSeqEvento}`;
-    const dhEvento = new Date().toISOString().substring(0, 19);
+    const idEventoRef = `${cOrgao}110111${chave}`;
+    const dhEvento = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().substring(0, 19) + '-03:00';
 
     const detEvento =
       `<detEvento versao="1.00">` +
@@ -136,6 +136,7 @@ export async function POST(req: NextRequest) {
       location: { reference: "//*[local-name(.)='infEvento']", action: 'after' },
     });
     const eventoAssinado = sig.getSignedXml();
+    console.log(`[NFE-CANCEL] XML ASSINADO (primeiros 2000 chars): ${eventoAssinado.substring(0, 2000)}`);
 
     // 5. Envia lote de evento
     const idLote = String(Date.now()).slice(-15);

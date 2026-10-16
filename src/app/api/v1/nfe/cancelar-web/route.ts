@@ -150,8 +150,8 @@ export async function GET(req: NextRequest) {
     // ANTES (errado): ID + cOrgao + 110111 + CNPJ + chave + nSeq = 67 chars (rejeitado cStat 215)
     const cOrgao = chave.substring(0, 2);
     const nSeqEvento = '1';
-    const idEventoRef = `${cOrgao}110111${cert.info.cnpj}${chave}${nSeqEvento}`;
-    const dhEvento = new Date().toISOString().substring(0, 19) + '-03:00';
+    const idEventoRef = `${cOrgao}110111${chave}`;
+    const dhEvento = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().substring(0, 19) + '-03:00';
 
     const eventoXml =
       `<?xml version="1.0" encoding="UTF-8"?>` +
