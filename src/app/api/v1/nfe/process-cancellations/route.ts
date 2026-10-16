@@ -144,6 +144,12 @@ async function cancelarNfe(
     const xMotivo = tag(resp.data, 'xMotivo');
     const nProtCancel = tag(resp.data, 'nProt');
 
+    // LOG DETALHADO da resposta completa da SEFAZ (para debug de cStat=128 etc)
+    console.log(`[PROCESS-CANCEL] SEFAZ: cStat=${cStat} xMotivo=${xMotivo}`);
+    console.log(`[PROCESS-CANCEL] XML evento enviado (antes assinar): ${eventoXml.substring(0, 1500)}`);
+    console.log(`[PROCESS-CANCEL] SOAP response completa (${resp.data.length} chars): ${resp.data.substring(0, 4000)}`);
+    console.log(`[PROCESS-CANCEL] Id do infEvento: ID${idEventoRef} (${idEventoRef.length} chars após 'ID')`);
+
     if (cStat === '135' || cStat === '155' || cStat === '144') {
       // Sucesso no cancelamento
       await write('account.move', [moveId], {
